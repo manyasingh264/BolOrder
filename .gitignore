@@ -1,0 +1,33 @@
+./ms1-core-api/.env
+
+./ms1-core-api/node_modules
+
+# Node.js
+**/node_modules/
+
+# Environment files
+**/.env
+**/.env.*
+!.env.example
+
+# Next.js
+**/.next/
+
+# Build
+**/dist/
+**/build/
+
+# Logs
+**/*.log
+
+# Python
+**/.venv/
+**/__pycache__/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
