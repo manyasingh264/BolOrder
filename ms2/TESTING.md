@@ -1,33 +1,108 @@
 # MS2 — Voice AI Service
-## Step 12: Manual Testing Guide
+## Integration Testing Guide
+
+---
+
+## Architecture Overview
+
+**Important:** The frontend never talks to MS2 directly. All communication flows through MS1:
+
+```
+React (Frontend) → MS1 (Express) → MS2 (FastAPI)
+                     ↓
+                PostgreSQL
+```
+
+MS1 acts as a secure gateway, injecting `auth_token` and `salesman_id` from the authenticated request context.
 
 ---
 
 ## Prerequisites
 
-1. MS1 running at `http://localhost:3000`  
-2. MS2 `.env` file created (copy `.env.example`, add your Gemini API key)  
-3. MS2 server running: `uvicorn app.main:app --reload --port 8000`
+1. **PostgreSQL** running with seeded database
+2. **MS1** running at `http://localhost:3000`
+3. **MS2** `.env` file created (copy `.env.example`, add your Gemini API key)
+4. **MS2** server running: `uvicorn app.main:app --reload --port 8000`
+5. **Frontend** running: `npm run dev` (typically at `http://localhost:5173`)
 
 ---
 
-## Test 1 — Health Check
+## MS2 Direct API Testing (for debugging)
+
+These tests call MS2 directly. **Do not use these from the frontend** — use MS1's proxy endpoints instead.
+
+### Test 1 — Health Check
 
 ```powershell
 Invoke-RestMethod -Uri "http://localhost:8000/api/v1/health" -Method GET
 ```
-**Expected:** `{ status: "ok", service: "ms2-voice-ai" }`
+**Expected:** `{ status: "healthy", service: "BolOrder Voice AI Service", ... }`
+
+### Test 2 — Docs UI
+
+Open in browser: `http://localhost:8000/docs`
 
 ---
 
-## Test 2 — Docs UI
+## MS1 Proxy Endpoints (Frontend → MS1 → MS2)
 
-Open in browser: `http://localhost:8000/docs`  
-All 4 conversation endpoints should appear.
+The frontend calls these MS1 endpoints, which proxy to MS2:
+
+| Method   | MS1 Path                              | MS2 Path (proxied to)           |
+|----------|--------------------------------------|----------------------------------|
+| `POST`   | `/api/voice-sessions/start`          | `/api/v1/conversation/start`     |
+| `POST`   | `/api/voice-sessions/:id/audio`      | `/api/v1/conversation/audio`     |
+| `POST`   | `/api/voice-sessions/:id/reply`      | `/api/v1/conversation/reply`     |
+| `DELETE` | `/api/voice-sessions/:id`            | `/api/v1/conversation/:id`       |
+| `GET`    | `/api/health/ai`                     | `/api/v1/health`                 |
+
+**Security:** MS1 automatically injects `auth_token` and `salesman_id` from the JWT payload.
 
 ---
 
-## Test 3 — Full Voice Order Flow (Happy Path)
+## Full End-to-End Test (via Frontend)
+
+### Step 1: Login to Frontend
+
+1. Open `http://localhost:5173` in browser
+2. Login with salesman credentials (e.g., `salesman@bolorder.com` / `Password123!`)
+
+### Step 2: Navigate to Voice Order Page
+
+1. Click "Voice Order" in sidebar
+2. Wait for session to start automatically (check browser console for errors)
+
+### Step 3: Record Initial Order
+
+1. Click the microphone button
+2. Speak: "Ram Traders ko 10 packet Aloo Bhujia"
+3. Click stop when done
+4. Click "Send to AI"
+
+### Step 4: Handle Clarification (if triggered)
+
+If AI asks "Which Ram Traders?":
+- **Option A (Text):** Type "Ram Traders Main Road" and click Send
+- **Option B (Voice):** Record voice reply and send
+
+### Step 5: Review and Confirm Order
+
+When AI shows the order summary:
+- Review shop name, items, and quantities
+- Click "Confirm & Create Order"
+
+### Step 6: Verify Order Created
+
+1. Navigate to Orders page
+2. The new order should appear with status `PENDING_CONFIRMATION`
+3. Navigate to Dashboard
+4. The order count should reflect the new order
+
+---
+
+## MS1 → MS2 Direct Testing (with auth)
+
+For debugging MS1→MS2 communication:
 
 ### Step A: Login to MS1 (get salesman token)
 ```powershell
@@ -39,120 +114,110 @@ $salesmanId = $login.data.user.id
 Write-Host "Token: $token"
 ```
 
-### Step B: Start a conversation session
+### Step B: Start conversation via MS1
 ```powershell
-$start = Invoke-RestMethod -Uri "http://localhost:8000/api/v1/conversation/start" -Method POST
-$sessionId = $start.sessionId
+$headers = @{ Authorization = "Bearer $token" }
+$start = Invoke-RestMethod -Uri "http://localhost:3000/api/voice-sessions/start" `
+         -Method POST -Headers $headers
+$sessionId = $start.data.sessionId
 Write-Host "Session: $sessionId"
 ```
 
-### Step C: Send audio file (first order turn)
+### Step C: Send audio via MS1
 ```powershell
-# Requires a test audio file saying e.g., "Sharma Store ke liye 10 packet Aloo Bhujia 200 gram"
 $audioPath = "C:\path\to\test_audio.wav"
 
 $form = @{
-    session_id  = $sessionId
-    salesman_id = $salesmanId
-    auth_token  = $token
-    audio       = Get-Item $audioPath
+    audio = Get-Item $audioPath
 }
-$resp = Invoke-RestMethod -Uri "http://localhost:8000/api/v1/conversation/audio" `
-        -Method POST -Form $form
-Write-Host "Status: $($resp.status)"
-Write-Host "Message: $($resp.message)"
-```
-
-**Expected outcomes:**
-- `status: "clarifying"` → MS2 couldn't find the shop, asking for clarification
-- `status: "confirming"` → Shop and products found, showing summary
-- `message` → Hindi/English text of what MS2 said
-
-### Step D: Reply to clarification (if needed)
-```powershell
-$replyForm = @{
-    session_id = $sessionId
-    auth_token = $token
-    reply      = "Sharma General Store"   # corrected shop name
-}
-$resp2 = Invoke-RestMethod -Uri "http://localhost:8000/api/v1/conversation/reply" `
-         -Method POST -Form $replyForm
-Write-Host "Status: $($resp2.status)"
-Write-Host "Message: $($resp2.message)"
-```
-
-### Step E: Confirm the order
-```powershell
-$confirmForm = @{
-    session_id = $sessionId
-    auth_token = $token
-    reply      = "Haan"   # "Yes" in Hindi
-}
-$resp3 = Invoke-RestMethod -Uri "http://localhost:8000/api/v1/conversation/reply" `
-         -Method POST -Form $confirmForm
-Write-Host "Status: $($resp3.status)"          # Expected: "completed"
-Write-Host "Order: $($resp3.order | ConvertTo-Json)"
-```
-
-### Step F: Cancel the order (alternative to Step E)
-```powershell
-$cancelForm = @{
-    session_id = $sessionId
-    auth_token = $token
-    reply      = "Nahi"   # "No" in Hindi
-}
-Invoke-RestMethod -Uri "http://localhost:8000/api/v1/conversation/reply" `
-    -Method POST -Form $cancelForm
-```
-
----
-
-## Test 4 — End Session Early
-```powershell
-Invoke-RestMethod -Uri "http://localhost:8000/api/v1/conversation/$sessionId" -Method DELETE
+$resp = Invoke-RestMethod -Uri "http://localhost:3000/api/voice-sessions/$sessionId/audio" `
+        -Method POST -Headers $headers -Form $form
+Write-Host "Status: $($resp.data.status)"
+Write-Host "Message: $($resp.data.message)"
 ```
 
 ---
 
 ## Conversation Status Reference
 
-| `status`      | Meaning                                      | React action             |
-|---------------|----------------------------------------------|--------------------------|
-| `clarifying`  | MS2 needs more info (shop/product/quantity)  | Play audio, ask user     |
-| `confirming`  | MS2 showing order summary, awaiting yes/no   | Play audio, show summary |
-| `completed`   | Order placed in MS1 successfully             | Show success + order ID  |
-| `cancelled`   | User cancelled the order                     | Show cancelled message   |
-| `failed`      | MS1 API error during order creation          | Show error, offer retry  |
+| `status`      | Meaning                                      | Frontend action                          |
+|---------------|----------------------------------------------|------------------------------------------|
+| `clarifying`  | MS2 needs more info (shop/product/quantity)  | Play TTS audio, show question, ask user  |
+| `completed`   | Order ready for confirmation                 | Show order summary for user confirmation |
+| `cancelled`   | User cancelled the order                     | Show cancelled message                   |
+| `failed`      | MS1 API error during order creation          | Show error, offer retry                  |
 
 ---
 
-## Response Schema
+## Response Schema (MS1 → Frontend)
 
 ```json
 {
-  "sessionId":         "uuid",
-  "status":            "clarifying | confirming | completed | cancelled | failed",
-  "message":           "Hindi/English text (what MS2 said)",
-  "audio_base64":      "base64-encoded MP3 (play via <audio> tag in React)",
-  "clarification_field": "shop | product | confirmation | null",
-  "draft_order": {
-    "shopId":   "uuid",
-    "shopName": "Sharma General Store",
-    "items":    [{"productVariantId": "uuid", "quantity": 10, ...}]
-  },
-  "order": { "...MS1 order object on completion..." }
+  "success": true,
+  "message": "Audio processed successfully",
+  "data": {
+    "sessionId":         "uuid",
+    "status":            "clarifying | completed | cancelled | failed",
+    "message":           "Hindi/English text (what AI said)",
+    "audio_base64":      "base64-encoded MP3 (play via VoicePlayer)",
+    "clarification_field": "shop | product | null",
+    "draft_order": {
+      "shopId":   "uuid",
+      "shopName": "Sharma General Store",
+      "items":    [{"productVariantId": "uuid", "quantity": 10, ...}]
+    },
+    "order": { "...MS1 order object on completion..." }
+  }
 }
 ```
 
 ---
 
-## Conversation Endpoints Summary
+## MS2 → MS1 Order Creation (Final Step)
 
-| Method   | Path                                 | Purpose                    |
-|----------|--------------------------------------|----------------------------|
-| `POST`   | `/api/v1/conversation/start`         | Create session             |
-| `POST`   | `/api/v1/conversation/audio`         | Send audio, get AI reply   |
-| `POST`   | `/api/v1/conversation/reply`         | Send text reply            |
-| `DELETE` | `/api/v1/conversation/{session_id}`  | End session                |
-| `GET`    | `/api/v1/health`                     | Health check               |
-| `GET`    | `/docs`                              | Swagger UI                 |
+When conversation completes, MS2 calls MS1 directly:
+
+**Endpoint:** `POST http://localhost:3000/api/orders/voice`
+
+**Payload:**
+```json
+{
+  "shopId": "uuid",
+  "items": [
+    { "productVariantId": "uuid", "quantity": 10 }
+  ],
+  "rawTranscript": "Original speech-to-text transcript"
+}
+```
+
+**Response:** Order created with status `PENDING_CONFIRMATION`
+
+---
+
+## Troubleshooting
+
+### Health check fails
+- Verify MS2 is running on port 8000
+- Check MS2 logs for startup errors
+- Verify `FASTAPI_BASE_URL` in MS1 `.env` is `http://localhost:8000`
+
+### Audio upload fails
+- Check MS1 uploads directory exists and is writable
+- Verify audio file size < 25MB
+- Check multer configuration in `voiceSessions.controller.js`
+
+### Session not found
+- Session TTL is 30 minutes (configurable in MS2 `.env`)
+- Check session store is initialized correctly
+- Verify session ID is being passed correctly
+
+### CORS errors
+- MS1 CORS origins: `http://localhost:5173,http://localhost:3000`
+- MS2 CORS origins: `http://localhost:5173,http://localhost:3000`
+- Verify credentials are enabled in both services
+
+### Order not appearing in frontend
+- Check MS1 database for the order
+- Verify order status is `PENDING_CONFIRMATION`
+- Refresh Orders page or Dashboard
+- Check browser console for API errors

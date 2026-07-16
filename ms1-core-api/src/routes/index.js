@@ -25,8 +25,8 @@ router.get('/health', (req, res) => {
 // Frontend calls this before showing the "Record Voice Order" button.
 // If offline → frontend disables recording and shows "AI service unavailable".
 router.get('/health/ai', async (req, res) => {
-  const aiService = require('../services/ai.service');
-  const result    = await aiService.checkFastApiHealth();
+  const voiceSessionService = require('../services/voiceSession.service');
+  const result    = await voiceSessionService.checkFastApiHealth();
   res.status(result.online ? 200 : 503).json({
     success:   result.online,
     message:   result.online ? 'AI service is online' : 'AI service is offline',
@@ -56,5 +56,8 @@ router.use('/orders', require('../modules/orders/orders.routes'));
 
 // Step 10 — Dashboard Module ✅
 router.use('/dashboard', require('../modules/dashboard/dashboard.routes'));
+
+// Voice Sessions Module — Proxy to MS2 conversation API
+router.use('/voice-sessions', require('../modules/voiceSessions/voiceSessions.routes'));
 
 module.exports = router;

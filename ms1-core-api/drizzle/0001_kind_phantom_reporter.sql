@@ -1,0 +1,1 @@
+ALTER TABLE "customer_shops" ADD COLUMN "is_verified" boolean DEFAULT false NOT NULL;

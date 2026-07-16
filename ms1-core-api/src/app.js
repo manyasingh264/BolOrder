@@ -28,7 +28,10 @@ app.use(express.urlencoded({ extended: true }));
 
 // Allow cross-origin requests from the React frontend
 // In production, replace with: cors({ origin: 'https://your-frontend-domain.com' })
-app.use(cors());
+app.use(cors({
+  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:5173', 'http://localhost:3000'],
+  credentials: true,
+}));
 
 // HTTP request logger — logs method, URL, status code, and response time
 // 'dev' format: GET /api/health 200 2.456 ms

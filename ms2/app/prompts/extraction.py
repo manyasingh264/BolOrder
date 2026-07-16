@@ -32,9 +32,11 @@ EXTRACT THESE FIELDS:
 1. shop_name     — The shop the salesman is placing an order FOR.
                    Common patterns: "X ko", "X ke liye", "for X store", "X wale ko"
                    Example: "Sharma General Store ko" → shop_name = "Sharma General Store"
+                   IMPORTANT: ALWAYS extract shop_name in ENGLISH, even if transcript is in Hindi.
+                   Translate Hindi shop names to English (e.g., "गुप्ता जैनरल इस्टोर" → "Gupta General Store")
 
 2. products      — List of products ordered. For each product:
-   - product_name        : Product name (e.g., "Aloo Bhujia", "Moong Dal", "Mixture")
+   - product_name        : Product name in ENGLISH (e.g., "Aloo Bhujia", "Moong Dal", "Mixture")
    - variant_description : Weight/size spoken (e.g., "200 gram", "500g", "bada wala", "chota packet")
    - quantity            : Number of units (INTEGER — no decimals)
    - unit                : Ordering unit (e.g., "packet", "box", "dabba", "peti")
@@ -52,6 +54,7 @@ RULES:
 - If variant is "bada"=large, "chota"=small — keep as is, we will clarify later
 - If shop name is COMPLETELY unclear, set needs_clarification=true and ask for shop name
 - Do NOT infer products you are not sure about
+- CRITICAL: shop_name and product_name MUST be in ENGLISH for database matching
 
 EXAMPLE:
 Transcript: "Sharma General Store ke liye bees packet Aloo Bhujia do sau gram aur das packet Moong Dal paanch sau gram chahiye"

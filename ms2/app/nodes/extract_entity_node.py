@@ -26,7 +26,7 @@ def extract_entity_node(state: VoiceOrderState) -> dict:
     """
     Extract shop name and products from the transcript using Gemini.
 
-    Reads:  transcript, language, conversation_history
+    Reads:  transcript, language, conversation_history, clarification_field
     Writes: extracted_shop_name, extracted_products, language,
             clarification_required, clarification_question
     """
@@ -39,15 +39,39 @@ def extract_entity_node(state: VoiceOrderState) -> dict:
     transcript = state.get("transcript", "")
     language   = state.get("language", "hi")
     history    = state.get("conversation_history", [])
+    clarification_field = state.get("clarification_field")
 
     logger.info(f"extract_entity_node: extracting from '{transcript[:60]}...'")
 
-    llm     = LLMService()
-    result  = llm.extract_order_entities(
-        transcript=transcript,
-        language=language,
-        conversation_history=history,
-    )
+    # If clarifying a specific field, preserve previously extracted entities
+    # and only update the field being clarified
+    if clarification_field == "product_variant":
+        # Direct update: preserve shop and products, update the last product's variant
+        prev_shop = state.get("extracted_shop_name", "")
+        prev_products = state.get("extracted_products", [])
+        
+        logger.info(f"extract_entity_node: clarifying variant - preserving shop='{prev_shop}', products={len(prev_products)}")
+        
+        # Create a mock result that preserves previous data
+        # We'll update the variant description in the product lookup node instead
+        result = type('obj', (object,), {
+            'shop_name': prev_shop,
+            'products': [type('obj', (object,), p) for p in prev_products],
+            'language': language,
+            'needs_clarification': False,
+            'clarification_question': None,
+        })()
+        
+        # Store the clarification transcript for the product lookup node to use
+        # This is a workaround - the product lookup node will handle variant matching
+    else:
+        # Full extraction
+        llm     = LLMService()
+        result  = llm.extract_order_entities(
+            transcript=transcript,
+            language=language,
+            conversation_history=history,
+        )
 
     updates = {
         "extracted_shop_name":  result.shop_name,

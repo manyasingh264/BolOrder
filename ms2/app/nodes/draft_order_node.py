@@ -48,9 +48,11 @@ def draft_order_node(state: VoiceOrderState) -> dict:
             {
                 "productVariantId": p["productVariantId"],
                 "quantity":         p["quantity"],
-                "product_name":     p.get("product_name", ""),
+                "productName":      p.get("product_name", ""),
                 "variant_description": p.get("variant_description", ""),
                 "unit":             p.get("unit", "packet"),
+                "unitPrice":        p.get("unit_price", "0.00"),
+                "subtotal":         str(float(p.get("unit_price", "0.00")) * p["quantity"]),
             }
             for p in products
         ],

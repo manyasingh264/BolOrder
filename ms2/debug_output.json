@@ -1,0 +1,7 @@
+{
+  "language": "hi",
+  "lang_prob": 0.77,
+  "transcript": "शर्मा जैन्रल स्टोर के लिए बीस पकत आलुभुजिया दू सो ग्राम चाहिये",
+  "gemini_status": "error",
+  "gemini_error": "404 NOT_FOUND. {'error': {'code': 404, 'message': 'This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use a newer model for the latest features and improvements.', 'status': 'NOT_FOUND'}}"
+}

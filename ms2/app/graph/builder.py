@@ -74,6 +74,26 @@ def route_after_products(state: VoiceOrderState) -> str:
     return "draft_order_node"
 
 
+def route_after_draft(state: VoiceOrderState) -> str:
+    """After draft: run confirmation only if transcript contains yes/no keywords."""
+    transcript = state.get("transcript", "").lower()
+    
+    # Check if transcript contains yes/no keywords
+    yes_keywords = {"haan", "ha", "han", "bilkul", "theek", "sahi", "karo", "bhejo", "place", "confirm", "confirmed", "yes", "yep", "yeah", "ok", "okay", "sure", "correct", "right", "absolutely", "proceed"}
+    no_keywords = {"nahi", "na", "nah", "mat", "band", "galat", "rok", "cancel", "no", "nope", "stop", "wrong", "incorrect", "don't"}
+    
+    tokens = set(transcript.split())
+    has_yes = any(token in yes_keywords for token in tokens)
+    has_no = any(token in no_keywords for token in tokens)
+    
+    if has_yes or has_no:
+        # This is a confirmation reply turn
+        return "confirmation_node"
+    
+    # First turn - skip confirmation, let frontend show summary
+    return END
+
+
 def route_after_confirmation(state: VoiceOrderState) -> str:
     """After yes/no: create order if confirmed, else end."""
     status = state.get("confirmation_status")
@@ -140,8 +160,15 @@ def build_graph():
     # clarification_node → END (always — wait for next user turn)
     graph.add_edge("clarification_node", END)
 
-    # draft_order_node → confirmation_node (always)
-    graph.add_edge("draft_order_node", "confirmation_node")
+    # draft_order_node → conditional (skip confirmation on first turn)
+    graph.add_conditional_edges(
+        "draft_order_node",
+        route_after_draft,
+        {
+            "confirmation_node": "confirmation_node",
+            END:                 END,
+        },
+    )
 
     # confirmation_node → conditional
     graph.add_conditional_edges(

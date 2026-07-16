@@ -33,6 +33,11 @@ logger = get_logger(__name__)
 
 def _variant_label(variant: dict) -> str:
     """Build a searchable string from a variant dict, e.g., '200 g' or '500 grams'."""
+    # MS1 returns 'size' field (e.g., '200g'), not separate weight/unit
+    size = variant.get("size", "")
+    if size:
+        return size.lower()
+    # Fallback to weight + unit if size is not available
     weight = variant.get("weight", "")
     unit   = variant.get("unit", "")
     return f"{weight} {unit}".strip().lower()
@@ -72,7 +77,7 @@ async def product_lookup_node(state: VoiceOrderState) -> dict:
     """
     Match extracted products against MS1 product catalog.
 
-    Reads:  extracted_products, auth_token, language
+    Reads:  extracted_products, auth_token, language, transcript, clarification_field
     Writes: matched_products, clarification_required, clarification_question,
             clarification_field
     """
@@ -84,6 +89,14 @@ async def product_lookup_node(state: VoiceOrderState) -> dict:
     extracted = state.get("extracted_products", [])
     language  = state.get("language", "hi")
     auth_token = state.get("auth_token")
+    transcript = state.get("transcript", "")
+    clarification_field = state.get("clarification_field")
+
+    # If clarifying variant, update the last product's variant description with the transcript
+    if clarification_field == "product_variant" and extracted and transcript:
+        logger.info(f"product_lookup_node: updating variant for last product with transcript '{transcript}'")
+        # Update the last product's variant description
+        extracted[-1]["variant_description"] = transcript
 
     if not extracted:
         return {

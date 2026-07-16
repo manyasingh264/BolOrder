@@ -1,85 +1,102 @@
-// services/voice.api.js — API layer for the Voice Order AI feature.
+// services/voice.api.js — Calls MS2 (Voice AI Service) directly.
 //
-// ══════════════════════════════════════════════════════════════
-// THIS IS THE ONLY FILE THAT CHANGES WHEN FASTAPI IS READY.
-// ══════════════════════════════════════════════════════════════
+// Why direct MS2 calls instead of going through MS1?
+//   MS1 is the business microservice (orders, auth, products).
+//   MS2 is the voice AI microservice (Whisper + LLM + LangGraph).
+//   The frontend calls each microservice directly for its own domain.
 //
-// Current state: MOCKED
-//   - Simulates 2.5 second AI processing delay
-//   - Returns a realistic fake response
-//   - No backend call is made
+// MS2 endpoints used:
+//   POST /api/v1/conversation/start        → get sessionId
+//   POST /api/v1/conversation/audio        → send voice audio
+//   POST /api/v1/conversation/reply        → send text reply
+//   GET  /api/v1/health                    → AI health check
 //
-// Future state: REAL (FastAPI via Express bridge)
-//   - Comment out the mock section
-//   - Uncomment the real implementation
-//   - POST /api/orders/voice with multipart/form-data (field: "audio")
-//   - Express (MS1) forwards to FastAPI, creates order, returns result
-//
-// Zero React component changes required — this is the seam.
+// Auth: MS2 receives auth_token + salesman_id as form fields per request.
 
-import api from './axios.instance';
+import axios from 'axios';
+import store from '../redux/store';
 
-// ─── MOCK RESPONSE ────────────────────────────────────────────────────────────
-// Realistic fake data that matches exactly what FastAPI will return.
-// Replace with actual UUIDs from your seeded database for realistic testing.
-const MOCK_AI_RESPONSE = {
-  shopId:        'mock-shop-id-001',
-  shopName:      'Sharma Kirana Store',
-  rawTranscript: 'Sharma ji ke liye, das packet aloo bhujia 200 gram aur paanch packet mixture 500 gram chahiye.',
-  confidence:    0.94,
-  items: [
-    {
-      productVariantId: 'mock-variant-id-001',
-      productName:      'Aloo Bhujia 200g',
-      quantity:         10,
-      unitPrice:        '30.00',
-      subtotal:         '300.00',
-    },
-    {
-      productVariantId: 'mock-variant-id-002',
-      productName:      'Mixture 500g',
-      quantity:         5,
-      unitPrice:        '65.00',
-      subtotal:         '325.00',
-    },
-  ],
+// ─── MS2 Axios Instance ──────────────────────────────────────────────────────
+const ms2 = axios.create({
+  baseURL: import.meta.env.VITE_MS2_BASE_URL || 'http://localhost:8000/api/v1',
+  timeout: 120000, // 120s — Whisper + LLM can take time
+});
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+const getAuth = () => {
+  const state = store.getState();
+  return {
+    token:      state.auth.token      || '',
+    salesmanId: state.auth.user?.id   || '',
+  };
 };
 
-// ─── submitVoiceOrder ─────────────────────────────────────────────────────────
-// @param {Blob} audioBlob — the recorded audio from the browser MediaRecorder
-// @returns {Promise<Object>} — { shopId, shopName, rawTranscript, confidence, items[] }
-//
-export const submitVoiceOrder = async (audioBlob) => {
-  // ══ MOCK IMPLEMENTATION (active now) ══════════════════════════════════════
-  // Simulates AI processing time so the UI transition feels real.
-  await new Promise((resolve) => setTimeout(resolve, 2500));
-
-  // Simulate occasional AI failure (uncomment to test error handling):
-  // if (Math.random() < 0.2) throw new Error('AI service unavailable. Please try again.');
-
-  return MOCK_AI_RESPONSE;
-  // ══ END MOCK ══════════════════════════════════════════════════════════════
-
-  // ══ REAL IMPLEMENTATION (uncomment when FastAPI + MS1 bridge is ready) ══
-  // const formData = new FormData();
-  // formData.append('audio', audioBlob, 'voice-order.webm');
-  //
-  // const response = await api.post('/orders/voice', formData, {
-  //   headers: { 'Content-Type': 'multipart/form-data' },
-  //   timeout: 60000, // 60 seconds for AI processing
-  // });
-  //
-  // return response.data.data;
-  // ══ END REAL ══════════════════════════════════════════════════════════════
+// ─── startConversation ───────────────────────────────────────────────────────
+// @returns {Promise<{ sessionId: string, message: string }>}
+export const startConversation = async () => {
+  const response = await ms2.post('/conversation/start');
+  // MS2 returns { sessionId, status, message }
+  return {
+    sessionId: response.data.sessionId,
+    message:   response.data.message,
+  };
 };
 
-// ─── checkAiServiceHealth ─────────────────────────────────────────────────────
-// Called before showing the record button.
-// If AI is offline, frontend disables recording and shows a warning.
+// ─── sendAudio ───────────────────────────────────────────────────────────────
+// @param {string} sessionId
+// @param {Blob}   audioBlob — from MediaRecorder (webm/mp3/wav)
+// @returns {Promise<Object>} — conversation response
+export const sendAudio = async (sessionId, audioBlob) => {
+  const { token, salesmanId } = getAuth();
+
+  const formData = new FormData();
+  formData.append('session_id',   sessionId);
+  formData.append('salesman_id',  salesmanId);
+  formData.append('auth_token',   token);
+  formData.append('audio',        audioBlob, 'voice-order.webm');
+
+  const response = await ms2.post('/conversation/audio', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120000,
+  });
+
+  return response.data;
+};
+
+// ─── sendReply ───────────────────────────────────────────────────────────────
+// @param {string} sessionId
+// @param {string} reply — text reply (e.g. "Haan", "Nahi", shop name)
+// @returns {Promise<Object>} — conversation response
+export const sendReply = async (sessionId, reply) => {
+  const { token, salesmanId } = getAuth();
+
+  const formData = new FormData();
+  formData.append('session_id',   sessionId);
+  formData.append('salesman_id',  salesmanId);
+  formData.append('auth_token',   token);
+  formData.append('reply',        reply);
+
+  const response = await ms2.post('/conversation/reply', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 30000,
+  });
+
+  return response.data;
+};
+
+// ─── endConversation ─────────────────────────────────────────────────────────
+// Sessions expire automatically in MS2 (TTL). This is a no-op for cleanup.
+export const endConversation = async (_sessionId) => {
+  // MS2 sessions auto-expire. No explicit delete endpoint required.
+};
+
+// ─── checkAiServiceHealth ────────────────────────────────────────────────────
+// Returns { online: boolean, message: string }
 export const checkAiServiceHealth = async () => {
   try {
-    const response = await api.get('/health/ai');
-    return { online: response.data.success, message: response.data.message };
+    const response = await ms2.get('/health', { timeout: 5000 });
+    const ok = response.data?.status === 'healthy';
+    return { online: ok, message: ok ? 'AI service is online.' : 'AI service unhealthy.' };
   } catch {
     return { online: false, message: 'AI service is currently offline.' };
   }
