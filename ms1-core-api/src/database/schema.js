@@ -64,14 +64,15 @@ const users = pgTable('users', {
 // Each shop is assigned to one salesman (salesmanId).
 
 const customerShops = pgTable('customer_shops', {
-  id:        uuid('id').defaultRandom().primaryKey(),
-  shopName:  text('shop_name').notNull(),
-  ownerName: text('owner_name'),
-  phone:     text('phone'),
-  address:   text('address'),
+  id:         uuid('id').defaultRandom().primaryKey(),
+  shopName:   text('shop_name').notNull(),
+  ownerName:  text('owner_name'),
+  phone:      text('phone'),
+  address:    text('address'),
+  isVerified: boolean('is_verified').default(false).notNull(),
   salesmanId: uuid('salesman_id').references(() => users.id, { onDelete: 'set null' }),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  createdAt:  timestamp('created_at').defaultNow().notNull(),
+  updatedAt:  timestamp('updated_at').defaultNow().notNull(),
 });
 
 // ─── 3. Shop Aliases ──────────────────────────────────────────────────────────
