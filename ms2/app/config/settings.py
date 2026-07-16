@@ -25,16 +25,22 @@ class Settings(BaseSettings):
     PORT: int = 8000
     LOG_LEVEL: str = "INFO"
 
-    # ── OpenAI ───────────────────────────────────────────────────
-    OPENAI_API_KEY: str = Field(..., description="OpenAI API key — required for LLM extraction")
-    OPENAI_MODEL: str = "gpt-4o"
+    # ── Gemini LLM ───────────────────────────────────────────────
+    # MODEL_PROVIDER allows future migration to openai / anthropic / groq.
+    # Business logic never reads MODEL_PROVIDER — only LLMService does.
+    MODEL_PROVIDER: str = "gemini"
+    MODEL_NAME: str = "gemini-1.5-flash"
+    API_KEY: str = Field(
+        default="",
+        description="Gemini API key — set this in .env before running",
+    )
 
-    # ── Whisper ───────────────────────────────────────────────────
+    # ── Whisper (Speech-to-Text) ──────────────────────────────────
     WHISPER_MODEL: str = "small"
     DEVICE: str = "cpu"
     COMPUTE_TYPE: str = "int8"
 
-    # ── MS1 ───────────────────────────────────────────────────────
+    # ── MS1 (Business Microservice) ───────────────────────────────
     MS1_BASE_URL: str = "http://localhost:3000"
     MS1_TIMEOUT_SECONDS: int = 10
 
@@ -50,10 +56,10 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
 
     # ── Session ───────────────────────────────────────────────────
-    SESSION_TTL_SECONDS: int = 3600
+    SESSION_TTL_SECONDS: int = 1800          # 30 minutes
 
     # ── Confidence Thresholds ─────────────────────────────────────
-    SHOP_CONFIDENCE_THRESHOLD: int = 70
+    SHOP_CONFIDENCE_THRESHOLD: int = 70      # RapidFuzz score 0-100
     PRODUCT_CONFIDENCE_THRESHOLD: int = 65
 
 

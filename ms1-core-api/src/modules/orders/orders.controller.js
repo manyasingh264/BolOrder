@@ -61,41 +61,46 @@ const updateStatus = async (req, res, next) => {
 };
 
 // ─── POST /api/orders/voice ───────────────────────────────────────────────────
-// Full FastAPI-integrated voice order flow:
+// Two modes:
 //
-//   1. uploadAudio middleware (in routes.js) saves audio to uploads/audio/
-//   2. authenticate middleware verifies the salesman's JWT
-//   3. THIS handler:
-//      a. Sends audio file to FastAPI AI microservice
-//      b. Gets back: { shopId, rawTranscript, items[], confidence }
-//      c. Creates the voice order in DB via ordersService.createVoiceOrder()
-//      d. Deletes the temp audio file (in finally — always runs)
-//      e. Returns the created order
+//   MODE 1 — JSON body (called by MS2 after AI conversation):
+//     Input:  application/json { shopId, items[], rawTranscript? }
+//     Output: 201 order at PENDING_CONFIRMATION status
 //
-// Input:  multipart/form-data  { audio: <file> }
-// Output: 201 with full order object
+//   MODE 2 — Audio file (legacy direct-upload flow):
+//     Input:  multipart/form-data { audio: <file> }
+//     Output: audio forwarded to FastAPI → order created
 //
 const createVoiceOrder = async (req, res, next) => {
-  const audioFile = req.file; // set by multer (upload.middleware.js)
+  const audioFile = req.file;
 
   try {
-    // Guard: multer must have saved a file (shouldn't happen in practice — routes.js enforces it)
+    // ─── MODE 1: JSON body from MS2 ──────────────────────────────
     if (!audioFile) {
-      throw new AppError('Audio file is required. Send a multipart/form-data request with field name "audio".', 400);
+      const { shopId, items, rawTranscript } = req.body;
+
+      if (!shopId || !Array.isArray(items) || items.length === 0) {
+        throw new AppError(
+          'JSON voice order requires: shopId (string) and items (array). ' +
+          'Or send an audio file as multipart/form-data with field name "audio".',
+          400
+        );
+      }
+
+      const order = await ordersService.createVoiceOrder(
+        { shopId, rawTranscript: rawTranscript || null, items },
+        req.user
+      );
+      return sendResponse(res, 201, true, 'Voice order created successfully', { order, aiMeta: null });
     }
 
-    // ─── Step 1: Send audio to FastAPI ──────────────────────────────────────
-    // aiService handles: timeout, ECONNREFUSED, 4xx/5xx, response shape validation
+    // ─── MODE 2: Audio file → FastAPI ────────────────────────────
     const aiResult = await aiService.processAudioOrder(audioFile.path);
-
-    // ─── Step 2: Create voice order in database ──────────────────────────────
-    // ordersService.createVoiceOrder expects: { shopId, rawTranscript, items[] }
-    // It creates the order at PENDING_CONFIRMATION status with a status history row.
     const order = await ordersService.createVoiceOrder(
       {
         shopId:        aiResult.shopId,
         rawTranscript: aiResult.rawTranscript || null,
-        items:         aiResult.items,   // [{ productVariantId, quantity }]
+        items:         aiResult.items,
       },
       req.user
     );
@@ -111,8 +116,7 @@ const createVoiceOrder = async (req, res, next) => {
   } catch (error) {
     next(error);
   } finally {
-    // ─── Step 3: Cleanup temp audio file ────────────────────────────────────
-    // Runs regardless of success or failure — we never leave orphaned audio on disk.
+    // Always clean up temp audio file (Mode 2 only)
     if (audioFile && fs.existsSync(audioFile.path)) {
       fs.unlinkSync(audioFile.path);
     }
