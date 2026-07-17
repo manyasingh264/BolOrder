@@ -2,10 +2,11 @@
 //
 // Why it exists: Thin page container — composes dashboard features into a layout.
 // Responsibility: Fetch all dashboard data on mount, render summary + tables + charts.
-// Access: ADMIN + SUPERVISOR (full data). SALESMAN sees personal summary only.
+// Access: ADMIN + SUPERVISOR only. SALESMAN is redirected to voice order page.
 
 import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import { RefreshCw, LayoutDashboard } from 'lucide-react';
 
 import DashboardLayout from '../../components/Layout/DashboardLayout';
@@ -30,12 +31,24 @@ import {
 import usePermissions from '../../hooks/usePermissions';
 import useAuth from '../../hooks/useAuth';
 import { formatDateTime } from '../../utils';
+import { ROUTES } from '../../constants';
 
 const DashboardPage = () => {
   const dispatch     = useDispatch();
+  const navigate     = useNavigate();
   const { user }     = useAuth();
-  const { isAdmin, isSupervisor } = usePermissions();
+  const { isAdmin, isSupervisor, isSalesman } = usePermissions();
   const canViewFull  = isAdmin || isSupervisor;
+
+  // Redirect salesmen to voice order page
+  useEffect(() => {
+    if (isSalesman) {
+      navigate(ROUTES.VOICE_ORDER);
+    }
+  }, [isSalesman, navigate]);
+
+  // Don't render if salesman (redirecting)
+  if (isSalesman) return null;
 
   const summary      = useSelector(selectDashboardSummary);
   const recentOrders = useSelector(selectRecentOrders);

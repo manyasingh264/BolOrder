@@ -20,3 +20,7 @@ export const removeItem    = (orderId, itemId)        => api.delete(`/orders/${o
 // ─── Status update (ADMIN + SUPERVISOR only) ──────────────────────────────────
 // PATCH /api/orders/:id/status → body: { status, remarks? }
 export const updateStatus  = (orderId, data)          => api.patch(`/orders/${orderId}/status`, data);
+
+// ─── Delete order (only DRAFT orders) ───────────────────────────────────────────
+// DELETE /api/orders/:id
+export const deleteOrder   = (orderId)                => api.delete(`/orders/${orderId}`);

@@ -49,4 +49,10 @@ router.post(
   shopsController.addAlias
 );
 
+router.delete(
+  '/:id',
+  authorize(ROLES.ADMIN, ROLES.SUPERVISOR),
+  shopsController.remove
+);
+
 module.exports = router;

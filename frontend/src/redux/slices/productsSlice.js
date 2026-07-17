@@ -55,6 +55,18 @@ export const updateProduct = createAsyncThunk(
   }
 );
 
+export const deleteProduct = createAsyncThunk(
+  'products/delete',
+  async (id, { rejectWithValue }) => {
+    try {
+      await productsApi.deleteProduct(id);
+      return id;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || 'Failed to delete product');
+    }
+  }
+);
+
 export const addProductVariant = createAsyncThunk(
   'products/addVariant',
   async ({ productId, variantData }, { rejectWithValue }) => {
@@ -126,6 +138,13 @@ const productsSlice = createSlice({
         if (idx !== -1) state.products[idx] = payload;
       })
       .addCase(updateProduct.rejected,  (state, { payload }) => { state.isLoading = false; state.error = payload; })
+
+      .addCase(deleteProduct.pending,   (state) => { state.isLoading = true; state.error = null; })
+      .addCase(deleteProduct.fulfilled, (state, { payload }) => {
+        state.isLoading = false;
+        state.products = state.products.filter((p) => p.id !== payload);
+      })
+      .addCase(deleteProduct.rejected,  (state, { payload }) => { state.isLoading = false; state.error = payload; })
 
       // After adding a variant, refresh the selected product in place
       .addCase(addProductVariant.fulfilled, (state, { payload }) => {

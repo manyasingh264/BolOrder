@@ -11,7 +11,8 @@ import Pagination from '../../components/Pagination/Pagination';
 import UserTable from '../../features/users/UserTable';
 import UserForm from '../../features/users/UserForm';
 
-import { fetchUsers, selectAllUsers, selectUsersLoading, setSelectedUser } from '../../redux/slices/usersSlice';
+import { fetchUsers, deleteUser, selectAllUsers, selectUsersLoading, setSelectedUser } from '../../redux/slices/usersSlice';
+import { addToast } from '../../redux/slices/uiSlice';
 import useDebounce from '../../hooks/useDebounce';
 import usePagination from '../../hooks/usePagination';
 
@@ -52,6 +53,18 @@ const UsersPage = () => {
     setEditUser(null);
   };
 
+  const handleDelete = (user) => {
+    if (window.confirm(`Are you sure you want to delete ${user.name}? This will deactivate their account.`)) {
+      dispatch(deleteUser(user.id)).then((result) => {
+        if (deleteUser.fulfilled.match(result)) {
+          dispatch(addToast({ message: 'User deleted successfully', type: 'success' }));
+        } else {
+          dispatch(addToast({ message: result.payload || 'Failed to delete user', type: 'error' }));
+        }
+      });
+    }
+  };
+
   return (
     <DashboardLayout title="Users">
       <div className="space-y-6">
@@ -81,7 +94,7 @@ const UsersPage = () => {
             <span className="text-sm text-surface-400">{filtered.length} result{filtered.length !== 1 ? 's' : ''}</span>
           </Card.Header>
 
-          <UserTable users={pagination.paginatedItems} isLoading={isLoading} onEdit={handleEdit} />
+          <UserTable users={pagination.paginatedItems} isLoading={isLoading} onEdit={handleEdit} onDelete={handleDelete} />
 
           <div className="px-4 border-t border-surface-100">
             <Pagination {...pagination} />

@@ -15,7 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, Mic } from 'lucide-react';
 
 import { loginUser, clearAuthError, selectAuthLoading, selectAuthError } from '../../redux/slices/authSlice';
-import { ROUTES } from '../../constants';
+import { ROUTES, ROLES } from '../../constants';
 import Input from '../../components/Input/Input';
 import Button from '../../components/Button/Button';
 
@@ -43,7 +43,10 @@ const LoginForm = () => {
   const onSubmit = async (data) => {
     const result = await dispatch(loginUser(data));
     if (loginUser.fulfilled.match(result)) {
-      navigate(ROUTES.DASHBOARD, { replace: true });
+      // Redirect based on role from the login response
+      const user = result.payload.user;
+      const redirectRoute = user?.role === ROLES.SALESMAN ? ROUTES.VOICE_ORDER : ROUTES.DASHBOARD;
+      navigate(redirectRoute, { replace: true });
     }
   };
 

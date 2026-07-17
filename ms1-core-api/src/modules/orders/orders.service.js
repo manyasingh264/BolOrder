@@ -15,10 +15,29 @@ const { ROLES, ORDER_STATUSES, VALID_STATUS_TRANSITIONS } = require('../../const
 // ─── Get All Orders ───────────────────────────────────────────────────────────
 
 const getAllOrders = async (requestingUser) => {
+  let orders;
   if (requestingUser.role === ROLES.SALESMAN) {
-    return ordersRepository.findOrdersBySalesmanId(requestingUser.userId);
+    orders = await ordersRepository.findOrdersBySalesmanId(requestingUser.userId);
+  } else {
+    orders = await ordersRepository.findAllOrders();
   }
-  return ordersRepository.findAllOrders();
+
+  // Transform nested objects to flat fields for frontend
+  return orders.map(order => {
+    const itemCount = order.items?.length || 0;
+    const totalAmount = order.items?.reduce((sum, item) => {
+      const subtotal = parseFloat(item.subtotal) || 0;
+      return sum + subtotal;
+    }, 0) || 0;
+
+    return {
+      ...order,
+      shopName: order.shop?.shopName || null,
+      salesmanName: order.salesman?.name || null,
+      itemCount,
+      totalAmount,
+    };
+  });
 };
 
 // ─── Get One Order ────────────────────────────────────────────────────────────
@@ -38,7 +57,20 @@ const getOrderById = async (id, requestingUser) => {
     throw new AppError('You do not have access to this order', 403);
   }
 
-  return order;
+  // Transform nested objects to flat fields for frontend
+  const itemCount = order.items?.length || 0;
+  const totalAmount = order.items?.reduce((sum, item) => {
+    const subtotal = parseFloat(item.subtotal) || 0;
+    return sum + subtotal;
+  }, 0) || 0;
+
+  return {
+    ...order,
+    shopName: order.shop?.shopName || null,
+    salesmanName: order.salesman?.name || null,
+    itemCount,
+    totalAmount,
+  };
 };
 
 // ─── Create Order ─────────────────────────────────────────────────────────────
@@ -172,6 +204,31 @@ const updateStatus = async (orderId, newStatus, remarks, requestingUser) => {
   return ordersRepository.findOrderById(updatedOrder.id);
 };
 
+const deleteOrder = async (orderId, requestingUser) => {
+  const order = await ordersRepository.findOrderById(orderId);
+
+  if (!order) throw new AppError('Order not found', 404);
+
+  // Only DRAFT orders can be deleted
+  if (order.status !== ORDER_STATUSES.DRAFT) {
+    throw new AppError(
+      `Cannot delete order with status "${order.status}". Only DRAFT orders can be deleted.`,
+      400
+    );
+  }
+
+  // SALESMAN can only delete their own orders
+  if (
+    requestingUser.role === ROLES.SALESMAN &&
+    order.salesmanId !== requestingUser.userId
+  ) {
+    throw new AppError('You do not have access to this order', 403);
+  }
+
+  await ordersRepository.deleteOrder(orderId);
+  return { message: 'Order deleted successfully' };
+};
+
 // ─── Voice Order ──────────────────────────────────────────────────────────────
 // Called after the AI microservice returns parsed order data.
 // Creates the order directly in PENDING_CONFIRMATION status.
@@ -219,5 +276,6 @@ module.exports = {
   addItem,
   removeItem,
   updateStatus,
+  deleteOrder,
   createVoiceOrder,
 };

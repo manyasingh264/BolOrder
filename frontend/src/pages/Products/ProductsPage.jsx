@@ -11,7 +11,8 @@ import Pagination from '../../components/Pagination/Pagination';
 import ProductTable from '../../features/products/ProductTable';
 import ProductForm from '../../features/products/ProductForm';
 
-import { fetchProducts, selectAllProducts, selectProductsLoading } from '../../redux/slices/productsSlice';
+import { fetchProducts, deleteProduct, selectAllProducts, selectProductsLoading } from '../../redux/slices/productsSlice';
+import { addToast } from '../../redux/slices/uiSlice';
 import useDebounce from '../../hooks/useDebounce';
 import usePagination from '../../hooks/usePagination';
 import usePermissions from '../../hooks/usePermissions';
@@ -39,6 +40,18 @@ const ProductsPage = () => {
   const handleEdit  = (p) => { setEditProduct(p); setFormOpen(true); };
   const handleClose = ()  => { setFormOpen(false); setEditProduct(null); };
 
+  const handleDelete = (product) => {
+    if (window.confirm(`Are you sure you want to delete "${product.name}"? This will deactivate the product.`)) {
+      dispatch(deleteProduct(product.id)).then((result) => {
+        if (deleteProduct.fulfilled.match(result)) {
+          dispatch(addToast({ message: 'Product deleted successfully', type: 'success' }));
+        } else {
+          dispatch(addToast({ message: result.payload || 'Failed to delete product', type: 'error' }));
+        }
+      });
+    }
+  };
+
   return (
     <DashboardLayout title="Products">
       <div className="space-y-6">
@@ -64,7 +77,7 @@ const ProductsPage = () => {
               placeholder="Search by name or category…" className="w-full max-w-xs" />
             <span className="text-sm text-surface-400">{filtered.length} result{filtered.length !== 1 ? 's' : ''}</span>
           </Card.Header>
-          <ProductTable products={pagination.paginatedItems} isLoading={isLoading} onEdit={handleEdit} />
+          <ProductTable products={pagination.paginatedItems} isLoading={isLoading} onEdit={handleEdit} onDelete={handleDelete} />
           <div className="px-4 border-t border-surface-100"><Pagination {...pagination} /></div>
         </Card>
       </div>

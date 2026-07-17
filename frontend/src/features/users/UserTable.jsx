@@ -2,10 +2,10 @@
 import Table from '../../components/Table/Table';
 import { RoleBadge, ActiveBadge } from '../../components/Badge/Badge';
 import Button from '../../components/Button/Button';
-import { Edit2 } from 'lucide-react';
+import { Edit2, Trash2 } from 'lucide-react';
 import { formatDate } from '../../utils';
 
-const COLUMNS = (onEdit) => [
+const COLUMNS = (onEdit, onDelete) => [
   {
     header:   'Name',
     accessor: 'name',
@@ -34,22 +34,33 @@ const COLUMNS = (onEdit) => [
   {
     header: 'Action',
     render: (_, row) => (
-      <Button
-        variant="ghost"
-        size="sm"
-        leftIcon={<Edit2 size={14} />}
-        onClick={(e) => { e.stopPropagation(); onEdit(row); }}
-        id={`edit-user-${row.id}`}
-      >
-        Edit
-      </Button>
+      <div className="flex gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          leftIcon={<Edit2 size={14} />}
+          onClick={(e) => { e.stopPropagation(); onEdit(row); }}
+          id={`edit-user-${row.id}`}
+        >
+          Edit
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          leftIcon={<Trash2 size={14} />}
+          className="text-red-500 hover:text-red-600 hover:bg-red-50"
+          onClick={(e) => { e.stopPropagation(); onDelete(row); }}
+        >
+          Delete
+        </Button>
+      </div>
     ),
   },
 ];
 
-const UserTable = ({ users, isLoading, onEdit }) => (
+const UserTable = ({ users, isLoading, onEdit, onDelete }) => (
   <Table
-    columns={COLUMNS(onEdit)}
+    columns={COLUMNS(onEdit, onDelete)}
     data={users}
     isLoading={isLoading}
     emptyTitle="No users found"

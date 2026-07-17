@@ -9,7 +9,8 @@ import SearchBar from '../../components/SearchBar/SearchBar';
 import Pagination from '../../components/Pagination/Pagination';
 import OrderTable from '../../features/orders/OrderTable';
 
-import { fetchOrders, selectAllOrders, selectOrdersLoading } from '../../redux/slices/ordersSlice';
+import { fetchOrders, deleteOrder, selectAllOrders, selectOrdersLoading } from '../../redux/slices/ordersSlice';
+import { addToast } from '../../redux/slices/uiSlice';
 import { ORDER_STATUS_LABELS } from '../../constants';
 import useDebounce from '../../hooks/useDebounce';
 import usePagination from '../../hooks/usePagination';
@@ -34,6 +35,18 @@ const OrdersPage = () => {
   });
 
   const pagination = usePagination(filtered, 10);
+
+  const handleDelete = (order) => {
+    if (window.confirm(`Are you sure you want to delete order #${String(order.id).slice(0,8).toUpperCase()}? This action cannot be undone.`)) {
+      dispatch(deleteOrder(order.id)).then((result) => {
+        if (deleteOrder.fulfilled.match(result)) {
+          dispatch(addToast({ message: 'Order deleted successfully', type: 'success' }));
+        } else {
+          dispatch(addToast({ message: result.payload || 'Failed to delete order', type: 'error' }));
+        }
+      });
+    }
+  };
 
   return (
     <DashboardLayout title="Orders">
@@ -65,7 +78,7 @@ const OrdersPage = () => {
             </div>
             <span className="text-sm text-surface-400 flex-shrink-0">{filtered.length} result{filtered.length !== 1 ? 's' : ''}</span>
           </Card.Header>
-          <OrderTable orders={pagination.paginatedItems} isLoading={isLoading} />
+          <OrderTable orders={pagination.paginatedItems} isLoading={isLoading} onDelete={handleDelete} />
           <div className="px-4 border-t border-surface-100"><Pagination {...pagination} /></div>
         </Card>
       </div>

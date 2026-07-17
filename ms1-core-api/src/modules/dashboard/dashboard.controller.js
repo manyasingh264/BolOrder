@@ -7,6 +7,7 @@ const sendResponse     = require('../../utils/sendResponse');
 const getSummary = async (req, res, next) => {
   try {
     const data = await dashboardService.getSummary();
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     return sendResponse(res, 200, true, 'Dashboard summary retrieved', data);
   } catch (error) { next(error); }
 };
@@ -15,6 +16,7 @@ const getSummary = async (req, res, next) => {
 const getRecentOrders = async (req, res, next) => {
   try {
     const data = await dashboardService.getRecentOrders();
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     return sendResponse(res, 200, true, 'Recent orders retrieved', data);
   } catch (error) { next(error); }
 };
@@ -23,6 +25,7 @@ const getRecentOrders = async (req, res, next) => {
 const getTopProducts = async (req, res, next) => {
   try {
     const data = await dashboardService.getTopProducts();
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     return sendResponse(res, 200, true, 'Top products retrieved', data);
   } catch (error) { next(error); }
 };
@@ -31,6 +34,7 @@ const getTopProducts = async (req, res, next) => {
 const getSalesmanPerformance = async (req, res, next) => {
   try {
     const data = await dashboardService.getSalesmanPerformance();
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     return sendResponse(res, 200, true, 'Salesman performance retrieved', data);
   } catch (error) { next(error); }
 };

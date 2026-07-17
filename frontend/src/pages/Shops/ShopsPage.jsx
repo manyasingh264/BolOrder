@@ -11,7 +11,8 @@ import Pagination from '../../components/Pagination/Pagination';
 import ShopTable from '../../features/shops/ShopTable';
 import ShopForm from '../../features/shops/ShopForm';
 
-import { fetchShops, selectAllShops, selectShopsLoading } from '../../redux/slices/shopsSlice';
+import { fetchShops, deleteShop, selectAllShops, selectShopsLoading } from '../../redux/slices/shopsSlice';
+import { addToast } from '../../redux/slices/uiSlice';
 import useDebounce from '../../hooks/useDebounce';
 import usePagination from '../../hooks/usePagination';
 import usePermissions from '../../hooks/usePermissions';
@@ -40,6 +41,18 @@ const ShopsPage = () => {
   const handleEdit = (shop) => { setEditShop(shop); setFormOpen(true); };
   const handleClose = () => { setFormOpen(false); setEditShop(null); };
 
+  const handleDelete = (shop) => {
+    if (window.confirm(`Are you sure you want to delete ${shop.shopName}? This action cannot be undone.`)) {
+      dispatch(deleteShop(shop.id)).then((result) => {
+        if (deleteShop.fulfilled.match(result)) {
+          dispatch(addToast({ message: 'Shop deleted successfully', type: 'success' }));
+        } else {
+          dispatch(addToast({ message: result.payload || 'Failed to delete shop', type: 'error' }));
+        }
+      });
+    }
+  };
+
   return (
     <DashboardLayout title="Shops">
       <div className="space-y-6">
@@ -64,7 +77,7 @@ const ShopsPage = () => {
               placeholder="Search by name, area, owner…" className="w-full max-w-xs" />
             <span className="text-sm text-surface-400">{filtered.length} result{filtered.length !== 1 ? 's' : ''}</span>
           </Card.Header>
-          <ShopTable shops={pagination.paginatedItems} isLoading={isLoading} onEdit={handleEdit} />
+          <ShopTable shops={pagination.paginatedItems} isLoading={isLoading} onEdit={handleEdit} onDelete={handleDelete} />
           <div className="px-4 border-t border-surface-100">
             <Pagination {...pagination} />
           </div>

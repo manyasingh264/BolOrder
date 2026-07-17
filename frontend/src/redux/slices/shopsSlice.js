@@ -67,6 +67,18 @@ export const addShopAlias = createAsyncThunk(
   }
 );
 
+export const deleteShop = createAsyncThunk(
+  'shops/delete',
+  async (id, { rejectWithValue }) => {
+    try {
+      await shopsApi.deleteShop(id);
+      return id;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || 'Failed to delete shop');
+    }
+  }
+);
+
 const shopsSlice = createSlice({
   name: 'shops',
   initialState: {
@@ -101,7 +113,15 @@ const shopsSlice = createSlice({
         const idx = state.shops.findIndex((s) => s.id === payload.id);
         if (idx !== -1) state.shops[idx] = payload;
       })
-      .addCase(updateShop.rejected,  (state, { payload }) => { state.isLoading = false; state.error = payload; });
+      .addCase(updateShop.rejected,  (state, { payload }) => { state.isLoading = false; state.error = payload; })
+
+      .addCase(deleteShop.pending,   (state) => { state.isLoading = true; state.error = null; })
+      .addCase(deleteShop.fulfilled, (state, { payload }) => {
+        state.isLoading = false;
+        state.shops = state.shops.filter((s) => s.id !== payload);
+        if (state.selectedShop?.id === payload) state.selectedShop = null;
+      })
+      .addCase(deleteShop.rejected,  (state, { payload }) => { state.isLoading = false; state.error = payload; });
   },
 });
 

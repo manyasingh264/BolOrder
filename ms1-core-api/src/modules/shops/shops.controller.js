@@ -54,4 +54,14 @@ const addAlias = async (req, res, next) => {
   }
 };
 
-module.exports = { getAll, getOne, create, update, addAlias };
+// DELETE /api/shops/:id
+const remove = async (req, res, next) => {
+  try {
+    const result = await shopsService.deleteShop(req.params.id);
+    return sendResponse(res, 200, true, result.message, null);
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { getAll, getOne, create, update, addAlias, remove };

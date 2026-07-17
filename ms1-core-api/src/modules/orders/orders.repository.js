@@ -11,12 +11,13 @@ const { orders, orderItems, orderStatusHistory, productVariants } = require('../
 
 // ─── Orders ───────────────────────────────────────────────────────────────────
 
-// Lean list — no items, just who/what/when
+// Lean list — includes items for count/total calculation
 const findAllOrders = async () => {
   return db.query.orders.findMany({
     with: {
       shop:     { columns: { id: true, shopName: true, ownerName: true } },
       salesman: { columns: { id: true, name: true } },
+      items:    { columns: { id: true, quantity: true, subtotal: true } },
     },
     orderBy: (orders, { desc }) => [desc(orders.createdAt)],
   });
@@ -29,6 +30,7 @@ const findOrdersBySalesmanId = async (salesmanId) => {
     with: {
       shop:     { columns: { id: true, shopName: true, ownerName: true } },
       salesman: { columns: { id: true, name: true } },
+      items:    { columns: { id: true, quantity: true, subtotal: true } },
     },
     orderBy: (orders, { desc }) => [desc(orders.createdAt)],
   });
@@ -122,6 +124,11 @@ const updateOrderStatus = async (id, newStatus) => {
   return result[0];
 };
 
+// Delete an order
+const deleteOrder = async (id) => {
+  await db.delete(orders).where(eq(orders.id, id));
+};
+
 // Append a row to order_status_history (immutable audit trail)
 const createStatusHistoryEntry = async (historyData) => {
   const result = await db
@@ -142,5 +149,6 @@ module.exports = {
   findOrderItemById,
   deleteOrderItem,
   updateOrderStatus,
+  deleteOrder,
   createStatusHistoryEntry,
 };

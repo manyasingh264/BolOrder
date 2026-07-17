@@ -6,9 +6,9 @@
 // Used by: DashboardLayout.jsx (once, wraps all authenticated pages)
 //
 // Navigation items are filtered by role:
-//   ADMIN      → Dashboard, Users, Products, Shops, Orders, Voice Order, Profile
-//   SUPERVISOR → Dashboard, Products, Shops, Orders, Voice Order, Profile
-//   SALESMAN   → Dashboard, Shops (assigned), Orders (own), Voice Order, Profile
+//   ADMIN      → Dashboard, Users, Products, Shops, Orders, Profile
+//   SUPERVISOR → Dashboard, Products, Shops, Orders, Profile
+//   SALESMAN   → Products, Shops (assigned), Orders (own), Voice Order, Profile
 
 import { useSelector } from 'react-redux';
 import {
@@ -29,12 +29,12 @@ import { useDispatch } from 'react-redux';
 
 // Full nav config — each item specifies which roles can see it
 const NAV_ITEMS = [
-  { to: ROUTES.DASHBOARD,   icon: LayoutDashboard, label: 'Dashboard',   roles: [ROLES.ADMIN, ROLES.SUPERVISOR, ROLES.SALESMAN] },
+  { to: ROUTES.DASHBOARD,   icon: LayoutDashboard, label: 'Dashboard',   roles: [ROLES.ADMIN, ROLES.SUPERVISOR] },
   { to: ROUTES.USERS,       icon: Users,           label: 'Users',       roles: [ROLES.ADMIN] },
   { to: ROUTES.PRODUCTS,    icon: Package,          label: 'Products',    roles: [ROLES.ADMIN, ROLES.SUPERVISOR, ROLES.SALESMAN] },
   { to: ROUTES.SHOPS,       icon: Store,            label: 'Shops',       roles: [ROLES.ADMIN, ROLES.SUPERVISOR, ROLES.SALESMAN] },
   { to: ROUTES.ORDERS,      icon: ClipboardList,    label: 'Orders',      roles: [ROLES.ADMIN, ROLES.SUPERVISOR, ROLES.SALESMAN] },
-  { to: ROUTES.VOICE_ORDER, icon: Mic,              label: 'Voice Order', roles: [ROLES.ADMIN, ROLES.SUPERVISOR, ROLES.SALESMAN] },
+  { to: ROUTES.VOICE_ORDER, icon: Mic,              label: 'Voice Order', roles: [ROLES.SALESMAN] },
   { to: ROUTES.PROFILE,     icon: User,             label: 'Profile',     roles: [ROLES.ADMIN, ROLES.SUPERVISOR, ROLES.SALESMAN] },
 ];
 

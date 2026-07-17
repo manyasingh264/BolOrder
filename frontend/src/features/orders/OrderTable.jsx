@@ -2,10 +2,12 @@
 import { useNavigate } from 'react-router-dom';
 import Table from '../../components/Table/Table';
 import { StatusBadge } from '../../components/Badge/Badge';
+import Button from '../../components/Button/Button';
+import { Trash2 } from 'lucide-react';
 import { formatDate, formatCurrency } from '../../utils';
 import { buildRoute } from '../../constants';
 
-const COLUMNS = [
+const COLUMNS = (onDelete) => [
   {
     header: 'Order ID',
     accessor: 'id',
@@ -37,13 +39,27 @@ const COLUMNS = [
     accessor: 'status',
     render: (val) => <StatusBadge status={val} />,
   },
+  {
+    header: 'Action',
+    render: (_, row) => (
+      <Button
+        variant="ghost"
+        size="sm"
+        leftIcon={<Trash2 size={14} />}
+        className="text-red-500 hover:text-red-600 hover:bg-red-50"
+        onClick={(e) => { e.stopPropagation(); onDelete(row); }}
+      >
+        Delete
+      </Button>
+    ),
+  },
 ];
 
-const OrderTable = ({ orders, isLoading }) => {
+const OrderTable = ({ orders, isLoading, onDelete }) => {
   const navigate = useNavigate();
   return (
     <Table
-      columns={COLUMNS}
+      columns={COLUMNS(onDelete)}
       data={orders}
       isLoading={isLoading}
       emptyTitle="No orders found"

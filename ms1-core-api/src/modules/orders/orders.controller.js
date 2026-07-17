@@ -11,6 +11,7 @@ const AppError      = require('../../utils/AppError');
 const getAll = async (req, res, next) => {
   try {
     const orders = await ordersService.getAllOrders(req.user);
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     return sendResponse(res, 200, true, 'Orders retrieved successfully', orders);
   } catch (error) { next(error); }
 };
@@ -57,6 +58,14 @@ const updateStatus = async (req, res, next) => {
       req.user
     );
     return sendResponse(res, 200, true, 'Order status updated', order);
+  } catch (error) { next(error); }
+};
+
+// DELETE /api/orders/:id
+const remove = async (req, res, next) => {
+  try {
+    const result = await ordersService.deleteOrder(req.params.id, req.user);
+    return sendResponse(res, 200, true, result.message, null);
   } catch (error) { next(error); }
 };
 
@@ -123,4 +132,4 @@ const createVoiceOrder = async (req, res, next) => {
   }
 };
 
-module.exports = { getAll, getOne, create, addItem, removeItem, updateStatus, createVoiceOrder };
+module.exports = { getAll, getOne, create, addItem, removeItem, updateStatus, remove, createVoiceOrder };

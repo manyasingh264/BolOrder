@@ -72,4 +72,7 @@ router.patch(
   ordersController.updateStatus
 );
 
+// ─── Delete Order (all roles — service checks ownership & DRAFT status) ────────
+router.delete('/:id', ordersController.remove);
+
 module.exports = router;

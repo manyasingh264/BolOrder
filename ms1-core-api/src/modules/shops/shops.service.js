@@ -48,6 +48,7 @@ const createShop = async (shopData) => {
     phone:      shopData.phone      || null,
     address:    shopData.address    || null,
     salesmanId: shopData.salesmanId || null,
+    isVerified: true, // Default to verified for new shops
   });
 };
 
@@ -73,4 +74,16 @@ const addAlias = async (shopId, alias) => {
   return shopsRepository.createAlias({ shopId, alias });
 };
 
-module.exports = { getAllShops, getShopById, createShop, updateShop, addAlias };
+// ─── Delete Shop ────────────────────────────────────────────────────────────────
+const deleteShop = async (id) => {
+  const existing = await shopsRepository.findShopById(id);
+
+  if (!existing) {
+    throw new AppError('Shop not found', 404);
+  }
+
+  await shopsRepository.deleteShop(id);
+  return { message: 'Shop deleted successfully' };
+};
+
+module.exports = { getAllShops, getShopById, createShop, updateShop, addAlias, deleteShop };

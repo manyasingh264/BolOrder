@@ -91,4 +91,22 @@ const updateUser = async (id, updateData, requestingUserId) => {
   return updatedUser;
 };
 
-module.exports = { getAllUsers, getUserById, createUser, updateUser };
+// Delete (deactivate) a user
+const deleteUser = async (id, requestingUserId) => {
+  // Rule: Confirm the user being deleted actually exists
+  const existingUser = await usersRepository.findUserById(id);
+  if (!existingUser) {
+    throw new AppError('User not found', 404);
+  }
+
+  // Rule: Cannot delete your own account
+  if (id === requestingUserId) {
+    throw new AppError('You cannot delete your own account', 400);
+  }
+
+  // Soft delete by setting isActive to false
+  await usersRepository.updateUser(id, { isActive: false });
+  return { message: 'User deleted successfully' };
+};
+
+module.exports = { getAllUsers, getUserById, createUser, updateUser, deleteUser };

@@ -57,4 +57,15 @@ const update = async (req, res, next) => {
   }
 };
 
-module.exports = { getAll, getOne, create, update };
+// DELETE /api/users/:id
+// Soft deletes a user by setting isActive to false
+const remove = async (req, res, next) => {
+  try {
+    const result = await usersService.deleteUser(req.params.id, req.user.userId);
+    return sendResponse(res, 200, true, result.message, null);
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { getAll, getOne, create, update, remove };

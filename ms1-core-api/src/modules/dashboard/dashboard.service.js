@@ -12,7 +12,16 @@ const dashboardRepository = require('./dashboard.repository');
 const getSummary = async () => {
   const { orders, revenue, users, catalog } = await dashboardRepository.getSummaryStats();
 
-  return {
+  const result = {
+    // Flat structure for frontend SummaryCards component
+    totalOrders: parseInt(orders.total_orders, 10),
+    totalRevenue: parseFloat(revenue.total_revenue).toFixed(2),
+    totalShops: parseInt(catalog.total_shops, 10),
+    totalProducts: parseInt(catalog.total_products, 10),
+    totalUsers: parseInt(users.total_users, 10),
+    pendingOrders: parseInt(orders.pending_confirmation, 10) + parseInt(orders.confirmed, 10),
+
+    // Keep nested structure for other uses
     orders: {
       total:               parseInt(orders.total_orders,        10),
       draft:               parseInt(orders.draft,               10),
@@ -23,7 +32,6 @@ const getSummary = async () => {
       cancelled:           parseInt(orders.cancelled,            10),
     },
     revenue: {
-      // PostgreSQL returns NUMERIC as string — always parse before sending to client
       totalRevenue: parseFloat(revenue.total_revenue).toFixed(2),
     },
     users: {
@@ -39,6 +47,8 @@ const getSummary = async () => {
       totalVariants: parseInt(catalog.total_variants, 10),
     },
   };
+
+  return result;
 };
 
 // ─── GET /api/dashboard/orders/recent ─────────────────────────────────────────

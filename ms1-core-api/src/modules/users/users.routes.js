@@ -36,4 +36,7 @@ router.get('/:id', usersController.getOne);
 // PATCH /api/users/:id   → update name, phone, role, isActive, or password
 router.patch('/:id', validateRequest(updateUserSchema), usersController.update);
 
+// DELETE /api/users/:id  → soft delete (deactivate) a user
+router.delete('/:id', usersController.remove);
+
 module.exports = router;

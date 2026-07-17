@@ -77,6 +77,13 @@ const createVariant = async (variantData) => {
   return result[0];
 };
 
+// Delete all variants for a product
+const deleteVariantsByProductId = async (productId) => {
+  await db
+    .delete(productVariants)
+    .where(eq(productVariants.productId, productId));
+};
+
 // Update a variant by ID
 const updateVariant = async (id, updateData) => {
   const result = await db
@@ -105,6 +112,7 @@ module.exports = {
   updateProduct,
   findVariantById,
   createVariant,
+  deleteVariantsByProductId,
   updateVariant,
   createAlias,
 };

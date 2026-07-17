@@ -52,6 +52,13 @@ router.patch(
   productsController.update
 );
 
+// DELETE /api/products/:id → ADMIN only
+router.delete(
+  '/:id',
+  authorize(ROLES.ADMIN),
+  productsController.remove
+);
+
 // ─── Variant Sub-Routes ───────────────────────────────────────────────────────
 
 // POST  /api/products/:id/variants             → ADMIN only

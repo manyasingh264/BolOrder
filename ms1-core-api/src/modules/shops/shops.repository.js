@@ -13,7 +13,10 @@ const { customerShops, shopAliases } = require('../../database/schema');
 // Get every shop (used by ADMIN and SUPERVISOR)
 const findAllShops = async () => {
   return db.query.customerShops.findMany({
-    with: { aliases: true },
+    with: { 
+      aliases: true,
+      salesman: true,
+    },
     orderBy: (customerShops, { asc }) => [asc(customerShops.shopName)],
   });
 };
@@ -22,7 +25,10 @@ const findAllShops = async () => {
 const findShopsBySalesmanId = async (salesmanId) => {
   return db.query.customerShops.findMany({
     where: (customerShops, { eq }) => eq(customerShops.salesmanId, salesmanId),
-    with: { aliases: true },
+    with: { 
+      aliases: true,
+      salesman: true,
+    },
     orderBy: (customerShops, { asc }) => [asc(customerShops.shopName)],
   });
 };
@@ -66,6 +72,13 @@ const createAlias = async (aliasData) => {
   return result[0];
 };
 
+// Delete a shop by ID
+const deleteShop = async (id) => {
+  await db
+    .delete(customerShops)
+    .where(eq(customerShops.id, id));
+};
+
 module.exports = {
   findAllShops,
   findShopsBySalesmanId,
@@ -73,4 +86,5 @@ module.exports = {
   createShop,
   updateShop,
   createAlias,
+  deleteShop,
 };

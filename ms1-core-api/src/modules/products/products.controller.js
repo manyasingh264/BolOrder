@@ -46,6 +46,16 @@ const update = async (req, res, next) => {
   }
 };
 
+// DELETE /api/products/:id
+const remove = async (req, res, next) => {
+  try {
+    const product = await productsService.deleteProduct(req.params.id);
+    return sendResponse(res, 200, true, 'Product deleted successfully', product);
+  } catch (error) {
+    next(error);
+  }
+};
+
 // POST /api/products/:id/variants
 const addVariant = async (req, res, next) => {
   try {
@@ -80,4 +90,4 @@ const addAlias = async (req, res, next) => {
   }
 };
 
-module.exports = { getAll, getOne, create, update, addVariant, updateVariant, addAlias };
+module.exports = { getAll, getOne, create, update, remove, addVariant, updateVariant, addAlias };

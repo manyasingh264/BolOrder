@@ -10,7 +10,7 @@ import { useSelector } from 'react-redux';
 
 import ProtectedRoute from './ProtectedRoute';
 import { ROUTES, ROLES } from '../constants';
-import { selectIsAuthenticated } from '../redux/slices/authSlice';
+import { selectIsAuthenticated, selectCurrentUser } from '../redux/slices/authSlice';
 
 // Pages (lazy imports can be added later for code-splitting)
 import LoginPage         from '../pages/Login/LoginPage';
@@ -28,6 +28,14 @@ const ALL_ROLES = [ROLES.ADMIN, ROLES.SUPERVISOR, ROLES.SALESMAN];
 
 const AppRouter = () => {
   const isAuthenticated = useSelector(selectIsAuthenticated);
+  const currentUser = useSelector(selectCurrentUser);
+
+  // Determine default route based on role
+  const getDefaultRoute = () => {
+    if (!isAuthenticated) return ROUTES.LOGIN;
+    if (currentUser?.role === ROLES.SALESMAN) return ROUTES.VOICE_ORDER;
+    return ROUTES.DASHBOARD;
+  };
 
   return (
     <Routes>
@@ -35,9 +43,9 @@ const AppRouter = () => {
       <Route
         path={ROUTES.LOGIN}
         element={
-          // If already logged in, redirect to dashboard
+          // If already logged in, redirect based on role
           isAuthenticated
-            ? <Navigate to={ROUTES.DASHBOARD} replace />
+            ? <Navigate to={getDefaultRoute()} replace />
             : <LoginPage />
         }
       />
@@ -45,16 +53,27 @@ const AppRouter = () => {
       {/* ── Utility ────────────────────────────────────────────────────── */}
       <Route path={ROUTES.UNAUTHORIZED} element={<UnauthorizedPage />} />
 
-      {/* ── Protected Routes — all authenticated roles ─────────────────── */}
+      {/* ── ADMIN + SUPERVISOR only Route ─────────────────────────────── */}
       <Route
         path={ROUTES.DASHBOARD}
         element={
-          <ProtectedRoute allowedRoles={ALL_ROLES}>
+          <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.SUPERVISOR]}>
             <DashboardPage />
           </ProtectedRoute>
         }
       />
 
+      {/* ── ADMIN-only Route ───────────────────────────────────────────── */}
+      <Route
+        path={ROUTES.USERS}
+        element={
+          <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
+            <UsersPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ── Protected Routes — all authenticated roles ─────────────────── */}
       <Route
         path={ROUTES.PRODUCTS}
         element={
@@ -94,7 +113,7 @@ const AppRouter = () => {
       <Route
         path={ROUTES.VOICE_ORDER}
         element={
-          <ProtectedRoute allowedRoles={ALL_ROLES}>
+          <ProtectedRoute allowedRoles={[ROLES.SALESMAN]}>
             <VoiceOrderPage />
           </ProtectedRoute>
         }
@@ -109,22 +128,12 @@ const AppRouter = () => {
         }
       />
 
-      {/* ── ADMIN-only Route ───────────────────────────────────────────── */}
-      <Route
-        path={ROUTES.USERS}
-        element={
-          <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
-            <UsersPage />
-          </ProtectedRoute>
-        }
-      />
-
       {/* ── Root redirect ─────────────────────────────────────────────── */}
       <Route
         path="/"
         element={
           <Navigate
-            to={isAuthenticated ? ROUTES.DASHBOARD : ROUTES.LOGIN}
+            to={getDefaultRoute()}
             replace
           />
         }
@@ -133,7 +142,7 @@ const AppRouter = () => {
       {/* ── 404 fallback ─────────────────────────────────────────────── */}
       <Route
         path="*"
-        element={<Navigate to={isAuthenticated ? ROUTES.DASHBOARD : ROUTES.LOGIN} replace />}
+        element={<Navigate to={getDefaultRoute()} replace />}
       />
     </Routes>
   );

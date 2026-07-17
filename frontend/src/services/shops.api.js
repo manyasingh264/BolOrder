@@ -9,3 +9,4 @@ export const getShopById  = (id)               => api.get(`/shops/${id}`);
 export const createShop   = (data)             => api.post('/shops', data);
 export const updateShop   = (id, data)         => api.patch(`/shops/${id}`, data);
 export const addAlias     = (shopId, alias)    => api.post(`/shops/${shopId}/aliases`, { alias });
+export const deleteShop   = (id)               => api.delete(`/shops/${id}`);

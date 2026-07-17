@@ -81,6 +81,18 @@ export const updateOrderStatus = createAsyncThunk(
   }
 );
 
+export const deleteOrder = createAsyncThunk(
+  'orders/delete',
+  async (orderId, { rejectWithValue }) => {
+    try {
+      await ordersApi.deleteOrder(orderId);
+      return orderId;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || 'Failed to delete order');
+    }
+  }
+);
+
 const ordersSlice = createSlice({
   name: 'orders',
   initialState: {
@@ -116,7 +128,15 @@ const ordersSlice = createSlice({
         const idx = state.orders.findIndex((o) => o.id === payload.id);
         if (idx !== -1) state.orders[idx] = payload;
       })
-      .addCase(updateOrderStatus.rejected,  (state, { payload }) => { state.isLoading = false; state.error = payload; });
+      .addCase(updateOrderStatus.rejected,  (state, { payload }) => { state.isLoading = false; state.error = payload; })
+
+      .addCase(deleteOrder.pending,   (state) => { state.isLoading = true; state.error = null; })
+      .addCase(deleteOrder.fulfilled, (state, { payload }) => {
+        state.isLoading = false;
+        state.orders = state.orders.filter((o) => o.id !== payload);
+        if (state.selectedOrder?.id === payload) state.selectedOrder = null;
+      })
+      .addCase(deleteOrder.rejected,  (state, { payload }) => { state.isLoading = false; state.error = payload; });
   },
 });
 
