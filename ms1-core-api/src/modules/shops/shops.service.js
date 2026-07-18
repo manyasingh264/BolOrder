@@ -42,7 +42,7 @@ const getShopById = async (id, requestingUser) => {
 
 // ─── Create Shop ──────────────────────────────────────────────────────────────
 const createShop = async (shopData) => {
-  return shopsRepository.createShop({
+  const shop = await shopsRepository.createShop({
     shopName:   shopData.shopName,
     ownerName:  shopData.ownerName  || null,
     phone:      shopData.phone      || null,
@@ -50,6 +50,8 @@ const createShop = async (shopData) => {
     salesmanId: shopData.salesmanId || null,
     isVerified: true, // Default to verified for new shops
   });
+  // Return shop with salesman relation
+  return shopsRepository.findShopById(shop.id);
 };
 
 // ─── Update Shop ──────────────────────────────────────────────────────────────
@@ -60,7 +62,9 @@ const updateShop = async (id, updateData) => {
     throw new AppError('Shop not found', 404);
   }
 
-  return shopsRepository.updateShop(id, updateData);
+  await shopsRepository.updateShop(id, updateData);
+  // Return shop with salesman relation
+  return shopsRepository.findShopById(id);
 };
 
 // ─── Add Alias ────────────────────────────────────────────────────────────────

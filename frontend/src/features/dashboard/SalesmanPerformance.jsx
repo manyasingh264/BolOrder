@@ -59,7 +59,7 @@ const SalesmanPerformance = ({ data, isLoading }) => {
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-surface-800 truncate">{salesman.name}</p>
             <p className="text-2xs text-surface-400">
-              {salesman.orderCount ?? 0} orders
+              {salesman.orders?.total ?? 0} orders
             </p>
           </div>
 

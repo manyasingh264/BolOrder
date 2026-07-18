@@ -54,10 +54,7 @@ def _detect_intent(transcript: str) -> str:
     for word in tokens:
         if word in NO_KEYWORDS:
             return "rejected"
-
     return "unknown"
-
-
 def confirmation_node(state: VoiceOrderState) -> dict:
     """
     Process the salesman's yes/no reply to the order summary.
@@ -68,7 +65,6 @@ def confirmation_node(state: VoiceOrderState) -> dict:
     transcript = state.get("transcript", "")
     language   = state.get("language", "hi")
     intent     = _detect_intent(transcript)
-
     logger.info(
         f"confirmation_node: transcript='{transcript[:50]}' | intent={intent}"
     )

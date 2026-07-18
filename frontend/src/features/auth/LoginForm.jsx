@@ -55,16 +55,16 @@ const LoginForm = () => {
       {/* Orange top accent bar */}
       <div className="h-1.5 bg-gradient-to-r from-primary-400 to-primary-600" />
 
-      <div className="p-8">
+      <div className="p-6 sm:p-8">
         {/* Logo + heading */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary-500 shadow-card-md mb-4">
-            <Mic size={26} className="text-white" />
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-primary-500 shadow-card-md mb-4">
+            <Mic size={22} sm:size={26} className="text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-surface-900">
+          <h1 className="text-xl sm:text-2xl font-bold text-surface-900">
             Bol<span className="text-primary-500">Order</span>
           </h1>
-          <p className="text-surface-500 text-sm mt-1.5">
+          <p className="text-surface-500 text-xs sm:text-sm mt-1.5">
             AI-Powered Voice Order Management
           </p>
         </div>

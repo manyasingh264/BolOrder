@@ -37,7 +37,10 @@ const findShopsBySalesmanId = async (salesmanId) => {
 const findShopById = async (id) => {
   return db.query.customerShops.findFirst({
     where: (customerShops, { eq }) => eq(customerShops.id, id),
-    with: { aliases: true },
+    with: { 
+      aliases: true,
+      salesman: true,
+    },
   });
 };
 

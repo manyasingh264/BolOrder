@@ -130,7 +130,7 @@ const VoiceOrderPage = () => {
 
   return (
     <DashboardLayout title="Voice Order">
-      <div className="max-w-2xl mx-auto space-y-6">
+      <div className="max-w-2xl mx-auto space-y-4 sm:space-y-6">
         {/* Header */}
         <div>
           <div className="flex items-center gap-2 mb-0.5">
@@ -159,7 +159,7 @@ const VoiceOrderPage = () => {
                       )}
                       <button
                         onClick={recorder.isRecording ? handleStopAndProcess : recorder.startRecording}
-                        className={`relative z-10 w-20 h-20 rounded-full flex items-center justify-center shadow-card-md transition-all ${
+                        className={`relative z-10 w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center shadow-card-md transition-all ${
                           recorder.isRecording
                             ? 'bg-red-500 hover:bg-red-600 text-white'
                             : 'bg-primary-500 hover:bg-primary-600 text-white'
@@ -167,8 +167,8 @@ const VoiceOrderPage = () => {
                         disabled={isLoading}
                       >
                         {recorder.isRecording
-                          ? <span className="w-7 h-7 bg-white rounded-sm" />
-                          : <Mic size={30} />
+                          ? <span className="w-6 h-6 sm:w-7 sm:h-7 bg-white rounded-sm" />
+                          : <Mic size={24} sm:size={30} />
                         }
                       </button>
                     </div>
@@ -178,7 +178,7 @@ const VoiceOrderPage = () => {
                           <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                           <span className="text-sm font-semibold text-red-600">Recording…</span>
                         </div>
-                        <span className="text-3xl font-mono font-bold text-surface-800">{recorder.durationFormatted}</span>
+                        <span className="text-2xl sm:text-3xl font-mono font-bold text-surface-800">{recorder.durationFormatted}</span>
                       </div>
                     ) : (
                       <p className="text-sm text-surface-500 text-center">
@@ -305,7 +305,7 @@ const VoiceOrderPage = () => {
                 <div className="flex flex-col items-center gap-4 py-2">
                   <button
                     onClick={recorder.isRecording ? handleStopAndProcess : recorder.startRecording}
-                    className={`w-16 h-16 rounded-full flex items-center justify-center shadow-card-md transition-all ${
+                    className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center shadow-card-md transition-all ${
                       recorder.isRecording
                         ? 'bg-red-500 hover:bg-red-600 text-white'
                         : 'bg-primary-500 hover:bg-primary-600 text-white'
@@ -313,13 +313,13 @@ const VoiceOrderPage = () => {
                     disabled={isLoading}
                   >
                     {recorder.isRecording
-                      ? <span className="w-5 h-5 bg-white rounded-sm" />
-                      : <Mic size={24} />
+                      ? <span className="w-4 h-4 sm:w-5 sm:h-5 bg-white rounded-sm" />
+                      : <Mic size={20} sm:size={24} />
                     }
                   </button>
                   {recorder.isRecording ? (
                     <div className="text-center">
-                      <span className="text-2xl font-mono font-bold text-surface-800">{recorder.durationFormatted}</span>
+                      <span className="text-xl sm:text-2xl font-mono font-bold text-surface-800">{recorder.durationFormatted}</span>
                     </div>
                   ) : (
                     <p className="text-xs text-surface-500">Record your answer</p>
@@ -387,7 +387,7 @@ const VoiceOrderPage = () => {
               </Card.Header>
               <div className="divide-y divide-surface-100">
                 {aiResponse.draft_order.items?.map((item, i) => (
-                  <div key={i} className="px-6 py-3.5 flex justify-between items-center">
+                  <div key={i} className="px-4 sm:px-6 py-3 sm:py-3.5 flex justify-between items-center">
                     <div>
                       <p className="text-sm font-medium text-surface-800">{item.productName}</p>
                       <p className="text-xs text-surface-400">{formatCurrency(item.unitPrice)} each</p>
@@ -399,9 +399,9 @@ const VoiceOrderPage = () => {
                   </div>
                 ))}
               </div>
-              <div className="px-6 py-4 border-t border-surface-200 flex justify-between">
+              <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-surface-200 flex justify-between">
                 <span className="font-semibold text-surface-700">Estimated Total</span>
-                <span className="font-bold text-lg text-surface-900">
+                <span className="font-bold text-base sm:text-lg text-surface-900">
                   {formatCurrency(aiResponse.draft_order.items?.reduce((sum, i) => sum + parseFloat(i.subtotal || 0), 0) || 0)}
                 </span>
               </div>

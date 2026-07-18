@@ -8,6 +8,7 @@ import Card from '../../components/Card/Card';
 import SearchBar from '../../components/SearchBar/SearchBar';
 import Pagination from '../../components/Pagination/Pagination';
 import OrderTable from '../../features/orders/OrderTable';
+import ConfirmDialog from '../../components/Modal/ConfirmDialog';
 
 import { fetchOrders, deleteOrder, selectAllOrders, selectOrdersLoading } from '../../redux/slices/ordersSlice';
 import { addToast } from '../../redux/slices/uiSlice';
@@ -24,6 +25,7 @@ const OrdersPage = () => {
 
   const [search, setSearch]       = useState('');
   const [statusFilter, setStatus] = useState('');
+  const [deleteDialog, setDeleteDialog] = useState({ isOpen: false, order: null });
   const debouncedSearch = useDebounce(search, 300);
 
   useEffect(() => { dispatch(fetchOrders()); }, [dispatch]);
@@ -37,15 +39,18 @@ const OrdersPage = () => {
   const pagination = usePagination(filtered, 10);
 
   const handleDelete = (order) => {
-    if (window.confirm(`Are you sure you want to delete order #${String(order.id).slice(0,8).toUpperCase()}? This action cannot be undone.`)) {
-      dispatch(deleteOrder(order.id)).then((result) => {
-        if (deleteOrder.fulfilled.match(result)) {
-          dispatch(addToast({ message: 'Order deleted successfully', type: 'success' }));
-        } else {
-          dispatch(addToast({ message: result.payload || 'Failed to delete order', type: 'error' }));
-        }
-      });
-    }
+    setDeleteDialog({ isOpen: true, order });
+  };
+
+  const confirmDelete = () => {
+    dispatch(deleteOrder(deleteDialog.order.id)).then((result) => {
+      if (deleteOrder.fulfilled.match(result)) {
+        dispatch(addToast({ message: 'Order deleted successfully', type: 'success' }));
+      } else {
+        dispatch(addToast({ message: result.payload || 'Failed to delete order', type: 'error' }));
+      }
+      setDeleteDialog({ isOpen: false, order: null });
+    });
   };
 
   return (
@@ -82,6 +87,15 @@ const OrdersPage = () => {
           <div className="px-4 border-t border-surface-100"><Pagination {...pagination} /></div>
         </Card>
       </div>
+      <ConfirmDialog
+        isOpen={deleteDialog.isOpen}
+        onClose={() => setDeleteDialog({ isOpen: false, order: null })}
+        onConfirm={confirmDelete}
+        title="Delete Order?"
+        description={`Are you sure you want to delete order #${String(deleteDialog.order?.id).slice(0,8).toUpperCase()}? This action cannot be undone.`}
+        confirmLabel="Delete"
+        variant="danger"
+      />
     </DashboardLayout>
   );
 };

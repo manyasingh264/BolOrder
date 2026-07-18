@@ -10,6 +10,7 @@ import SearchBar from '../../components/SearchBar/SearchBar';
 import Pagination from '../../components/Pagination/Pagination';
 import ProductTable from '../../features/products/ProductTable';
 import ProductForm from '../../features/products/ProductForm';
+import ConfirmDialog from '../../components/Modal/ConfirmDialog';
 
 import { fetchProducts, deleteProduct, selectAllProducts, selectProductsLoading } from '../../redux/slices/productsSlice';
 import { addToast } from '../../redux/slices/uiSlice';
@@ -26,6 +27,7 @@ const ProductsPage = () => {
   const [search, setSearch]         = useState('');
   const [formOpen, setFormOpen]     = useState(false);
   const [editProduct, setEditProduct] = useState(null);
+  const [deleteDialog, setDeleteDialog] = useState({ isOpen: false, product: null });
   const debouncedSearch = useDebounce(search, 300);
 
   useEffect(() => { dispatch(fetchProducts()); }, [dispatch]);
@@ -41,15 +43,18 @@ const ProductsPage = () => {
   const handleClose = ()  => { setFormOpen(false); setEditProduct(null); };
 
   const handleDelete = (product) => {
-    if (window.confirm(`Are you sure you want to delete "${product.name}"? This will deactivate the product.`)) {
-      dispatch(deleteProduct(product.id)).then((result) => {
-        if (deleteProduct.fulfilled.match(result)) {
-          dispatch(addToast({ message: 'Product deleted successfully', type: 'success' }));
-        } else {
-          dispatch(addToast({ message: result.payload || 'Failed to delete product', type: 'error' }));
-        }
-      });
-    }
+    setDeleteDialog({ isOpen: true, product });
+  };
+
+  const confirmDelete = () => {
+    dispatch(deleteProduct(deleteDialog.product.id)).then((result) => {
+      if (deleteProduct.fulfilled.match(result)) {
+        dispatch(addToast({ message: 'Product deleted successfully', type: 'success' }));
+      } else {
+        dispatch(addToast({ message: result.payload || 'Failed to delete product', type: 'error' }));
+      }
+      setDeleteDialog({ isOpen: false, product: null });
+    });
   };
 
   return (
@@ -82,6 +87,15 @@ const ProductsPage = () => {
         </Card>
       </div>
       <ProductForm isOpen={formOpen} onClose={handleClose} editProduct={editProduct} />
+      <ConfirmDialog
+        isOpen={deleteDialog.isOpen}
+        onClose={() => setDeleteDialog({ isOpen: false, product: null })}
+        onConfirm={confirmDelete}
+        title="Delete Product?"
+        description={`Are you sure you want to delete "${deleteDialog.product?.name}"? This will deactivate the product.`}
+        confirmLabel="Delete"
+        variant="danger"
+      />
     </DashboardLayout>
   );
 };

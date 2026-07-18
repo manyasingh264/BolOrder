@@ -37,7 +37,7 @@ const COLUMNS = [
   },
   {
     header:   'Amount',
-    accessor: 'totalAmount',
+    accessor: 'orderTotal',
     render:   (val) => <span className="font-semibold text-surface-800">{formatCurrency(val)}</span>,
   },
   {

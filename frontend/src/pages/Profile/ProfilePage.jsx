@@ -12,7 +12,7 @@ const ProfilePage = () => {
 
   return (
     <DashboardLayout title="My Profile">
-      <div className="max-w-2xl space-y-6">
+      <div className="max-w-2xl space-y-4 sm:space-y-6">
         <div className="flex items-center gap-2 mb-0.5">
           <User size={20} className="text-primary-500" />
           <h1 className="page-title">My Profile</h1>
@@ -21,15 +21,15 @@ const ProfilePage = () => {
         {/* Profile card */}
         <Card>
           <Card.Body>
-            <div className="flex items-start gap-6">
+            <div className="flex flex-col sm:flex-row sm:items-start gap-4 sm:gap-6">
               {/* Avatar */}
-              <div className="w-20 h-20 rounded-2xl bg-primary-500 flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 shadow-card-md">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-primary-500 flex items-center justify-center text-white text-xl sm:text-2xl font-bold flex-shrink-0 shadow-card-md mx-auto sm:mx-0">
                 {getInitials(user?.name)}
               </div>
-              <div className="flex-1 min-w-0">
-                <h2 className="text-xl font-bold text-surface-900">{user?.name}</h2>
+              <div className="flex-1 min-w-0 text-center sm:text-left">
+                <h2 className="text-lg sm:text-xl font-bold text-surface-900">{user?.name}</h2>
                 <p className="text-surface-500 text-sm mt-0.5">{user?.email}</p>
-                <div className="flex flex-wrap gap-2 mt-3">
+                <div className="flex flex-wrap gap-2 mt-3 justify-center sm:justify-start">
                   <RoleBadge role={role} />
                   <ActiveBadge isActive={true} />
                 </div>
@@ -49,9 +49,9 @@ const ProfilePage = () => {
                 ['Role',        ROLE_LABELS[role]],
                 ['User ID',     user?.id ? `#${String(user.id).slice(0,8).toUpperCase()}` : '—'],
               ].map(([label, value]) => (
-                <div key={label} className="flex justify-between items-center py-2 border-b border-surface-100 last:border-0">
+                <div key={label} className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 border-b border-surface-100 last:border-0 gap-1">
                   <dt className="text-sm text-surface-500">{label}</dt>
-                  <dd className="text-sm font-medium text-surface-800">{value ?? '—'}</dd>
+                  <dd className="text-sm font-medium text-surface-800 text-right">{value ?? '—'}</dd>
                 </div>
               ))}
             </dl>
@@ -73,7 +73,7 @@ const ProfilePage = () => {
                 { label: 'View All Orders',     allowed: ['ADMIN','SUPERVISOR'].includes(role) },
               ].map(({ label, allowed }) => (
                 <div key={label} className="flex items-center justify-between py-1.5 border-b border-surface-50 last:border-0">
-                  <span className="text-surface-600">{label}</span>
+                  <span className="text-sm text-surface-600">{label}</span>
                   <span className={`text-xs font-medium ${allowed ? 'text-green-600' : 'text-surface-400'}`}>
                     {allowed ? '✓ Allowed' : '✗ Restricted'}
                   </span>

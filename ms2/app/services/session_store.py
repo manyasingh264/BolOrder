@@ -31,7 +31,7 @@ class SessionStore:
         if session_id not in self._store:
             return None
         # Refresh TTL on access
-        self._timestamps[session_id] = time.time()
+        self._timestamps[session_id] = time.time()/
         return self._store[session_id]
 
     def set(self, session_id: str, state: dict) -> None:

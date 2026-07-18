@@ -10,6 +10,7 @@ import SearchBar from '../../components/SearchBar/SearchBar';
 import Pagination from '../../components/Pagination/Pagination';
 import UserTable from '../../features/users/UserTable';
 import UserForm from '../../features/users/UserForm';
+import ConfirmDialog from '../../components/Modal/ConfirmDialog';
 
 import { fetchUsers, deleteUser, selectAllUsers, selectUsersLoading, setSelectedUser } from '../../redux/slices/usersSlice';
 import { addToast } from '../../redux/slices/uiSlice';
@@ -24,6 +25,7 @@ const UsersPage = () => {
   const [search, setSearch]     = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [editUser, setEditUser] = useState(null);
+  const [deleteDialog, setDeleteDialog] = useState({ isOpen: false, user: null });
 
   const debouncedSearch = useDebounce(search, 300);
 
@@ -54,15 +56,18 @@ const UsersPage = () => {
   };
 
   const handleDelete = (user) => {
-    if (window.confirm(`Are you sure you want to delete ${user.name}? This will deactivate their account.`)) {
-      dispatch(deleteUser(user.id)).then((result) => {
-        if (deleteUser.fulfilled.match(result)) {
-          dispatch(addToast({ message: 'User deleted successfully', type: 'success' }));
-        } else {
-          dispatch(addToast({ message: result.payload || 'Failed to delete user', type: 'error' }));
-        }
-      });
-    }
+    setDeleteDialog({ isOpen: true, user });
+  };
+
+  const confirmDelete = () => {
+    dispatch(deleteUser(deleteDialog.user.id)).then((result) => {
+      if (deleteUser.fulfilled.match(result)) {
+        dispatch(addToast({ message: 'User deleted successfully', type: 'success' }));
+      } else {
+        dispatch(addToast({ message: result.payload || 'Failed to delete user', type: 'error' }));
+      }
+      setDeleteDialog({ isOpen: false, user: null });
+    });
   };
 
   return (
@@ -103,6 +108,15 @@ const UsersPage = () => {
       </div>
 
       <UserForm isOpen={formOpen} onClose={handleClose} editUser={editUser} />
+      <ConfirmDialog
+        isOpen={deleteDialog.isOpen}
+        onClose={() => setDeleteDialog({ isOpen: false, user: null })}
+        onConfirm={confirmDelete}
+        title="Delete User?"
+        description={`Are you sure you want to delete "${deleteDialog.user?.name}"? This will deactivate their account.`}
+        confirmLabel="Delete"
+        variant="danger"
+      />
     </DashboardLayout>
   );
 };

@@ -7,13 +7,14 @@
 
 import { NavLink } from 'react-router-dom';
 
-const SidebarItem = ({ to, icon: Icon, label, collapsed }) => (
+const SidebarItem = ({ to, icon: Icon, label, collapsed, onClick }) => (
   <NavLink
     to={to}
     className={({ isActive }) =>
       isActive ? 'sidebar-link-active' : 'sidebar-link'
     }
     title={collapsed ? label : undefined}
+    onClick={onClick}
   >
     {Icon && (
       <Icon

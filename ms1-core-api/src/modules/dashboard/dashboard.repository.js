@@ -139,12 +139,14 @@ const getSalesmanPerformance = async () => {
       COUNT(DISTINCT o.id) FILTER (WHERE o.status = 'PENDING_CONFIRMATION')   AS pending_orders,
       COUNT(DISTINCT o.id) FILTER (WHERE o.status = 'DRAFT')                  AS draft_orders,
       COALESCE(
-        SUM(oi.subtotal) FILTER (WHERE o.status = 'DELIVERED'), 0
+        (SELECT SUM(oi.subtotal)
+         FROM order_items oi
+         INNER JOIN orders o2 ON o2.id = oi.order_id
+         WHERE o2.salesman_id = u.id), 0
       )                                                                       AS total_revenue,
       COUNT(DISTINCT cs.id)                                                   AS assigned_shops
     FROM users u
     LEFT JOIN orders o          ON o.salesman_id = u.id
-    LEFT JOIN order_items oi    ON oi.order_id   = o.id
     LEFT JOIN customer_shops cs ON cs.salesman_id = u.id
     WHERE u.role = 'SALESMAN' AND u.is_active = true
     GROUP BY u.id, u.name, u.email, u.phone

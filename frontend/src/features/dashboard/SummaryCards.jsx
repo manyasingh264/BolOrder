@@ -61,9 +61,9 @@ const SummaryCards = ({ summary }) => {
   if (!summary) {
     // Skeleton state
     return (
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="card p-5 space-y-3">
+          <div key={i} className="card p-4 sm:p-5 space-y-3">
             <div className="w-10 h-10 rounded-xl bg-surface-100 animate-pulse" />
             <div className="h-6 bg-surface-100 rounded animate-pulse w-16" />
             <div className="h-3 bg-surface-100 rounded animate-pulse w-24" />
@@ -74,7 +74,7 @@ const SummaryCards = ({ summary }) => {
   }
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {CARD_CONFIG.map(({ key, label, icon: Icon, color, bg, format }) => {
         const value = summary[key] ?? 0;
         const displayValue = format === 'currency'
@@ -82,14 +82,14 @@ const SummaryCards = ({ summary }) => {
           : value.toLocaleString('en-IN');
 
         return (
-          <div key={key} className="card p-5 hover:shadow-card-md transition-shadow duration-200">
+          <div key={key} className="card p-4 sm:p-5 hover:shadow-card-md transition-shadow duration-200">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm text-surface-500 font-medium mb-1.5">{label}</p>
-                <p className="text-2xl font-bold text-surface-900">{displayValue}</p>
+                <p className="text-xs sm:text-sm text-surface-500 font-medium mb-1.5">{label}</p>
+                <p className="text-xl sm:text-2xl font-bold text-surface-900">{displayValue}</p>
               </div>
-              <div className={`w-11 h-11 rounded-xl ${bg} flex items-center justify-center flex-shrink-0`}>
-                <Icon size={22} className={color} />
+              <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl ${bg} flex items-center justify-center flex-shrink-0`}>
+                <Icon size={20} className={color} />
               </div>
             </div>
           </div>

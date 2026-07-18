@@ -16,6 +16,7 @@ const { products, productVariants, productAliases } = require('../../database/sc
 // Used by: salesman order form, product list page
 const findAllProducts = async () => {
   return db.query.products.findMany({
+    where: (products, { eq }) => eq(products.isActive, true),
     with: {
       variants: true,
     },

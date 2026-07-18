@@ -17,7 +17,7 @@ let toastId = 0; // simple incrementing ID for toasts
 const uiSlice = createSlice({
   name: 'ui',
   initialState: {
-    sidebarOpen: true,    // sidebar visible by default on desktop
+    sidebarOpen: true,    // sidebar visible by default (desktop), hidden on mobile via CSS
     toasts:      [],      // [{ id, message, type: 'success'|'error'|'info'|'warning' }]
     activeModal: null,    // null or string identifier of the open modal
   },

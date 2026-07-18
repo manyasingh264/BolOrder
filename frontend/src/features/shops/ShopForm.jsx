@@ -62,7 +62,7 @@ const ShopForm = ({ isOpen, onClose, editShop }) => {
     <Modal isOpen={isOpen} onClose={onClose} title={isEdit ? 'Edit Shop' : 'Add New Shop'}>
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <Input label="Shop Name" required placeholder="e.g. Sharma Kirana" error={errors.shopName?.message} {...register('shopName')} />
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input label="Owner Name" placeholder="Owner's name" {...register('ownerName')} />
           <Input label="Phone" placeholder="9876543210" {...register('phone')} />
         </div>

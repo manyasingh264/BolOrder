@@ -100,10 +100,10 @@ const DashboardPage = () => {
 
         {/* ── Main content — two-column on large screens ────────────────── */}
         {canViewFull ? (
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
 
-            {/* Recent Orders — takes 2 columns */}
-            <Card className="xl:col-span-2">
+            {/* Recent Orders — takes 2 columns on large screens */}
+            <Card className="lg:col-span-2 xl:col-span-2">
               <Card.Header>
                 <div>
                   <h2 className="text-base font-semibold text-surface-900">Recent Orders</h2>
