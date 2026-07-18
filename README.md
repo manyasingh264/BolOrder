@@ -1,33 +1,38 @@
-1.This project is an AI-powered Voice Order Management System for a namkeen manufacturing company.
-2.Salesmen place orders by speaking in Hindi or Hinglish instead of typing them. 
-3.The system converts speech to text, uses AI to identify the shop, products, and quantities, 
-and if any information is unclear, the AI asks clarification questions using text-to-speech and understands 
-the salesman's spoken reply. 
-4.After all details are confirmed, it generates a structured order and stores it in the database. 
+# AI Voice Order Management System
 
-Tech Stack
-1.Frontend: React + Vite + Tailwind CSS
-2.Backend (MS1): Express.js + Node.js
-3.AI Microservice (MS2): FastAPI + LangGraph
-4.Database: PostgreSQL (Supabase)
-5.ORM: Drizzle ORM
-6.Validation: Zod
-7.Authentication: JWT
+## Project Overview
 
-Roles
-1.Admin: Manages users, products, and shops.
-2.Supervisor: Monitors orders and salesmen.
-3.Salesman: Records voice orders and views assigned shops/orders.
+This project is an AI-powered Voice Order Management System for a namkeen manufacturing company.
 
-Workflow
-1.Salesman records a voice order.
-2.Speech is converted to text (Speech-to-Text).
-3.AI extracts entities such as the shop name, product names, and quantities from the transcript.
-4.The system verifies the shop and product names.
-5.If any information is missing or ambiguous, the AI converts its clarification question into speech using Text-to-Speech (TTS) and asks the salesman.
-6.The salesman responds by voice, and the response is converted back to text and processed by the AI until all required details are confirmed.
-7.A final order summary is generated for confirmation.
-8.After confirmation, the order is stored in PostgreSQL and becomes available on the dashboards.
+1. Salesmen place orders by speaking in Hindi or Hinglish.
+2. The system converts speech to text.
+3. AI extracts shop names, products, and quantities.
+4. If information is missing, the AI asks clarification questions.
+5. After confirmation, the order is stored in the database.
 
+## Tech Stack
 
+- Frontend: React + Vite + Tailwind CSS
+- Backend (MS1): Express.js + Node.js
+- AI Microservice (MS2): FastAPI + LangGraph
+- Database: PostgreSQL (Supabase)
+- ORM: Drizzle ORM
+- Validation: Zod
+- Authentication: JWT
 
+## Roles
+
+- **Admin:** Manages users, products, and shops.
+- **Supervisor:** Monitors orders and salesmen.
+- **Salesman:** Records voice orders and views assigned shops/orders.
+
+## Workflow
+
+1. Salesman records a voice order.
+2. Speech is converted to text.
+3. AI extracts entities.
+4. System verifies shop and product names.
+5. AI asks clarification questions if needed.
+6. Salesman responds by voice.
+7. AI generates an order summary.
+8. Order is stored in PostgreSQL.
