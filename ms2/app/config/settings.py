@@ -59,8 +59,10 @@ class Settings(BaseSettings):
     SESSION_TTL_SECONDS: int = 1800          # 30 minutes
 
     # ── Confidence Thresholds ─────────────────────────────────────
-    SHOP_CONFIDENCE_THRESHOLD: int = 70      # RapidFuzz score 0-100
-    PRODUCT_CONFIDENCE_THRESHOLD: int = 65
+    SHOP_CONFIDENCE_THRESHOLD: int = 70      # RapidFuzz score 0-100 (high confidence)
+    SHOP_MIN_MATCH_THRESHOLD: int = 40       # Minimum score to consider as potential match (lowered for better recall)
+    PRODUCT_CONFIDENCE_THRESHOLD: int = 65   # RapidFuzz score 0-100
+    MAX_RETRY_COUNT: int = 2                 # Max retries before offering alternatives
 
 
 # Singleton instance — import this everywhere

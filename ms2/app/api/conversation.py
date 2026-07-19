@@ -89,6 +89,14 @@ def _pre_process_reply(state: dict, reply_text: str) -> dict:
         state["extracted_shop_name"] = None
         state["shop_not_found"]      = False
         # Don't clear retry_count — we need to track it for "create new shop" logic
+        # Don't clear extracted_products - extract_entity_node will preserve them
+        logger.info(f"_pre_process_reply: shop clarification - preserving extracted_products: {state.get('extracted_products')}")
+    
+    elif field == "shop_confirm":
+        # User is answering yes/no to shop confirmation
+        # Don't re-extract shop name from "nahi" - let shop_lookup_node handle the response
+        state["extracted_shop_name"] = None  # Clear to prevent re-matching
+        logger.info(f"_pre_process_reply: shop_confirm - clearing extracted_shop_name to prevent re-matching")
 
     elif field == "product" or field == "product_variant" or field == "product_quantity":
         # User corrected a product — re-extract from the full reply
@@ -110,7 +118,9 @@ def _pre_process_reply(state: dict, reply_text: str) -> dict:
     # Clear clarification state — will be set again by nodes if still needed
     state["clarification_required"]  = False
     state["clarification_question"]  = None
-    state["clarification_field"]     = None
+    # Don't clear clarification_field for shop or shop_confirm - nodes need it
+    if field not in ("shop", "shop_confirm"):
+        state["clarification_field"]     = None
     state["tts_message"]             = None
 
     return state
@@ -195,10 +205,13 @@ async def send_audio(
         }
 
     # ── 4. Build or update state ───────────────────────────────────
-    if existing_state.get("shop_id") or existing_state.get("extracted_shop_name"):
+    logger.info(f"Existing state check - shop_id={existing_state.get('shop_id')}, extracted_shop_name={existing_state.get('extracted_shop_name')}, extracted_products={existing_state.get('extracted_products')}, clarification_field={existing_state.get('clarification_field')}")
+    
+    if existing_state.get("shop_id") or existing_state.get("extracted_shop_name") or existing_state.get("clarification_field"):
         # Continuing session — pre-process as a reply
         state = _pre_process_reply(dict(existing_state), transcript)
         state["language"] = language  # Update language from new audio
+        logger.info(f"After pre-process - extracted_products={state.get('extracted_products')}")
     else:
         # First audio turn — create fresh state
         state = initial_state(

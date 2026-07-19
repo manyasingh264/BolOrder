@@ -30,10 +30,13 @@ Your ONLY job is to extract structured order information from voice transcripts.
 
 EXTRACT THESE FIELDS:
 1. shop_name     — The shop the salesman is placing an order FOR.
-                   Common patterns: "X ko", "X ke liye", "for X store", "X wale ko"
+                   Common patterns: "X ko", "X ke liye", "for X store", "X wale ko", "X ki dukan", "X ka store", "X ki shop"
                    Example: "Sharma General Store ko" → shop_name = "Sharma General Store"
+                   Example: "Sharma ki dukan" → shop_name = "Sharma Store" or "Sharma"
+                   Example: "Ramesh Sharma ki dukan" → shop_name = "Ramesh Sharma Store" or "Ramesh Sharma"
                    IMPORTANT: ALWAYS extract shop_name in ENGLISH, even if transcript is in Hindi.
                    Translate Hindi shop names to English (e.g., "गुप्ता जैनरल इस्टोर" → "Gupta General Store")
+                   If only owner name is given (e.g., "Sharma ki dukan"), extract the owner name as shop_name
 
 2. products      — List of products ordered. For each product:
    - product_name        : Product name in ENGLISH (e.g., "Aloo Bhujia", "Moong Dal", "Mixture")

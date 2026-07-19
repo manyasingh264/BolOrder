@@ -61,8 +61,8 @@ def route_after_extract(state: VoiceOrderState) -> str:
 
 
 def route_after_shop(state: VoiceOrderState) -> str:
-    """After shop lookup: clarify if not found, else look up products."""
-    if state.get("shop_not_found"):
+    """After shop lookup: clarify if not found or needs confirmation, else look up products."""
+    if state.get("shop_not_found") or state.get("clarification_required"):
         return "clarification_node"
     return "product_lookup_node"
 

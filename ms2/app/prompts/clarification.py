@@ -12,13 +12,29 @@ def shop_not_found_message(shop_name: str, language: str = "hi") -> str:
     """Message when MS1 cannot find the shop by the spoken name."""
     if language == "hi":
         return (
-            f"'{shop_name}' naam ki koi dukaan nahi mili. "
-            "Kya aap dukaan ka poora naam bata sakte hain? "
-            "Ya owner ka naam bhi bata dein."
+            f"Maine samajha '{shop_name}' naam ki dukaan, "
+            "lekin record mein yeh dukaan nahi hai. "
+            "Kya aap dobara naam bata sakte hain?"
         )
     return (
-        f"No shop named '{shop_name}' was found. "
-        "Could you please provide the full shop name or the owner's name?"
+        f"I understood the shop name as '{shop_name}', "
+        "but it's not in our records. Could you please repeat the shop name?"
+    )
+
+
+def shop_not_found_with_options_message(shop_name: str, language: str = "hi") -> str:
+    """Message when shop is not found after max retries - offer alternatives."""
+    if language == "hi":
+        return (
+            f"Maine samajha '{shop_name}' naam ki dukaan, "
+            "lekin record mein yeh dukaan nahi hai. "
+            "Aap chahein toh: 1. Dusri dukaan ka naam bata dein, "
+            "2. Nai dukaan create karein, ya 3. Order cancel karein."
+        )
+    return (
+        f"I understood the shop name as '{shop_name}', "
+        "but it's not in our records. Would you like to: "
+        "1. Try another shop, 2. Create a new shop, or 3. Cancel the order?"
     )
 
 
@@ -52,12 +68,12 @@ def product_not_found_message(product_name: str, language: str = "hi") -> str:
     """Message when a product name cannot be matched."""
     if language == "hi":
         return (
-            f"'{product_name}' product nahi mila. "
-            "Kya aap sahi product ka naam bata sakte hain?"
+            f"'{product_name}' product available nahi hai. "
+            "Kya aap koi aur product bata sakte hain?"
         )
     return (
-        f"Could not find a product named '{product_name}'. "
-        "Could you please say the correct product name?"
+        f"'{product_name}' is not available. "
+        "Could you please name a different product?"
     )
 
 

@@ -35,6 +35,13 @@ def extract_entity_node(state: VoiceOrderState) -> dict:
     if state.get("shop_id") and state.get("matched_products"):
         logger.info("extract_entity_node: skipping — shop and products already resolved")
         return {}
+    
+    # Skip if clarifying shop confirmation - shop_lookup_node handles yes/no directly
+    clarification_field = state.get("clarification_field")
+    logger.info(f"extract_entity_node: checking skip - clarification_field='{clarification_field}'")
+    if clarification_field == "shop_confirm":
+        logger.info("extract_entity_node: skipping — shop_confirm handled by shop_lookup_node")
+        return {}
 
     transcript = state.get("transcript", "")
     language   = state.get("language", "hi")
@@ -64,6 +71,44 @@ def extract_entity_node(state: VoiceOrderState) -> dict:
         
         # Store the clarification transcript for the product lookup node to use
         # This is a workaround - the product lookup node will handle variant matching
+    elif clarification_field == "shop":
+        # Preserve previously extracted products when clarifying shop name
+        prev_products = state.get("extracted_products", [])
+        prev_shop = state.get("extracted_shop_name", "")
+        
+        logger.info(f"extract_entity_node: clarifying shop - preserving {len(prev_products)} products from previous extraction")
+        logger.info(f"extract_entity_node: previous shop='{prev_shop}', previous products={prev_products}")
+        
+        # Extract only the shop name from the new transcript
+        llm = LLMService()
+        result = llm.extract_order_entities(
+            transcript=transcript,
+            language=language,
+            conversation_history=history,
+        )
+        
+        logger.info(f"extract_entity_node: new extraction - shop='{result.shop_name}', products={len(result.products)}")
+        
+        # ALWAYS preserve previous products when clarifying shop
+        # The user is only providing the shop name, not repeating products
+        if prev_products:
+            logger.info(f"extract_entity_node: forcing restore of {len(prev_products)} previously extracted products")
+            # Use the dict directly, don't convert to mock objects
+            updates = {
+                "extracted_shop_name":  result.shop_name,
+                "extracted_products":   prev_products,  # Preserve as-is
+                "language":             result.language,
+                "clarification_required": result.needs_clarification,
+                "matched_products":      [],  # Force re-matching with new shop
+            }
+        else:
+            updates = {
+                "extracted_shop_name":  result.shop_name,
+                "extracted_products":   [p.model_dump() for p in result.products],
+                "language":             result.language,
+                "clarification_required": result.needs_clarification,
+                "matched_products":      [],  # Force re-matching with new shop
+            }
     else:
         # Full extraction
         llm     = LLMService()
@@ -73,16 +118,21 @@ def extract_entity_node(state: VoiceOrderState) -> dict:
             conversation_history=history,
         )
 
-    updates = {
-        "extracted_shop_name":  result.shop_name,
-        "extracted_products":   [p.model_dump() for p in result.products],
-        "language":             result.language,
-        "clarification_required": result.needs_clarification,
-    }
+        updates = {
+            "extracted_shop_name":  result.shop_name,
+            "extracted_products":   [p.model_dump() for p in result.products],
+            "language":             result.language,
+            "clarification_required": result.needs_clarification,
+        }
 
     if result.needs_clarification and result.clarification_question:
         updates["clarification_question"] = result.clarification_question
-        updates["clarification_field"]    = "entity"
+        # If shop_name is empty but products exist, this is a shop clarification
+        if not result.shop_name and result.products:
+            updates["clarification_field"] = "shop"
+            logger.info("extract_entity_node: shop name missing but products present - setting clarification_field='shop'")
+        else:
+            updates["clarification_field"] = "entity"
     else:
         # Clear any previous clarification state
         updates["clarification_question"] = None

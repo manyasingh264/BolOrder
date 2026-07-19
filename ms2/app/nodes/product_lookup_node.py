@@ -91,6 +91,7 @@ async def product_lookup_node(state: VoiceOrderState) -> dict:
     auth_token = state.get("auth_token")
     transcript = state.get("transcript", "")
     clarification_field = state.get("clarification_field")
+    unresolved_already = state.get("unresolved_products", [])
 
     # If clarifying variant, update the last product's variant description with the transcript
     if clarification_field == "product_variant" and extracted and transcript:
@@ -110,7 +111,20 @@ async def product_lookup_node(state: VoiceOrderState) -> dict:
     async with MS1Client(auth_token=auth_token) as client:
         all_products = await client.get_all_products()
 
-    product_names = [p.get("name", "") for p in all_products]
+    # Build list of (candidate_name, product_dict) tuples for matching
+    # Match against product name AND aliases if available
+    candidates: list[tuple[str, dict]] = []
+    for product in all_products:
+        candidates.append((product.get("name", ""), product))
+        # Add product aliases if available
+        aliases = product.get("aliases", [])
+        if isinstance(aliases, list):
+            for alias in aliases:
+                if alias:
+                    candidates.append((str(alias), product))
+
+    product_names = [name for name, _ in candidates]
+    candidate_products = [product for _, product in candidates]
 
     matched:     list[dict] = []
     unresolved:  list[str]  = []
@@ -119,6 +133,11 @@ async def product_lookup_node(state: VoiceOrderState) -> dict:
         spoken_name = item.get("product_name", "")
         variant_desc = item.get("variant_description", "")
         quantity     = item.get("quantity")
+
+        # Skip if this product was already asked about (prevent loops)
+        if spoken_name in unresolved_already:
+            logger.info(f"product_lookup_node: skipping '{spoken_name}' - already asked about")
+            continue
 
         # ── Match product name ──────────────────────────────────
         from rapidfuzz import process
@@ -135,7 +154,7 @@ async def product_lookup_node(state: VoiceOrderState) -> dict:
             continue
 
         matched_name, score, idx = name_match
-        product = all_products[idx]
+        product = candidate_products[idx]
         logger.info(f"product_lookup_node: '{spoken_name}' → '{matched_name}' (score={score})")
 
         # ── Match variant ───────────────────────────────────────
@@ -180,12 +199,15 @@ async def product_lookup_node(state: VoiceOrderState) -> dict:
         else:
             question = product_not_found_message(first_unresolved, language)
             field    = "product"
+            # Add to unresolved_products to prevent re-asking
+            unresolved_already.append(first_unresolved)
 
         return {
             "matched_products":        matched,   # Partial — keep what we found
             "clarification_required":  True,
             "clarification_question":  question,
             "clarification_field":     field,
+            "unresolved_products":     unresolved_already,
         }
 
     logger.info(f"product_lookup_node: all {len(matched)} products matched successfully")

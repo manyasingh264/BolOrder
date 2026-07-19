@@ -51,9 +51,12 @@ class VoiceOrderState(TypedDict):
     retry_count: int                             # Number of shop search retries
     is_new_shop: Optional[bool]                  # True if user confirms new shop
     pending_shop_info: dict[str, Any]            # PendingShopInfo dict (collected turn by turn)
+    proposed_shop: Optional[dict[str, Any]]      # Shop proposed for "Did you mean?" confirmation
+    shop_match_score: Optional[int]              # Confidence score for shop match
 
     # ── Product Resolution ─────────────────────────────────────
     matched_products: list[dict[str, Any]]       # list[MatchedProduct dicts]
+    unresolved_products: list[str]               # List of product names already asked about
 
     # ── Clarification ──────────────────────────────────────────
     clarification_required: bool
@@ -109,9 +112,12 @@ def initial_state(
         retry_count=0,
         is_new_shop=None,
         pending_shop_info={},
+        proposed_shop=None,
+        shop_match_score=None,
 
         # Products
         matched_products=[],
+        unresolved_products=[],
 
         # Clarification
         clarification_required=False,
