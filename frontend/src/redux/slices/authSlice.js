@@ -14,7 +14,7 @@
 //   Redux gives us a single source of truth accessible from any component.
 
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { loginApi } from '../../services/auth.api';
+import { loginApi, sendOtpApi, verifyOtpApi } from '../../services/auth.api';
 
 const STORAGE_KEY = 'bolorder_auth';
 
@@ -51,6 +51,43 @@ export const loginUser = createAsyncThunk(
   }
 );
 
+// ─── Async Thunk — Send OTP ─────────────────────────────────────────────────────
+// Calls POST /api/auth/send-otp
+// On success: returns success message
+// On failure: stores error message in state
+export const sendOtp = createAsyncThunk(
+  'auth/sendOtp',
+  async (email, { rejectWithValue }) => {
+    try {
+      const response = await sendOtpApi(email);
+      return response.data.message;
+    } catch (error) {
+      const message =
+        error.response?.data?.message || 'Failed to send OTP. Please try again.';
+      return rejectWithValue(message);
+    }
+  }
+);
+
+// ─── Async Thunk — Verify OTP ───────────────────────────────────────────────────
+// Calls POST /api/auth/verify-otp
+// On success: stores { token, user } in Redux state + localStorage
+// On failure: stores error message in state
+export const verifyOtp = createAsyncThunk(
+  'auth/verifyOtp',
+  async ({ email, otp }, { rejectWithValue }) => {
+    try {
+      const response = await verifyOtpApi({ email, otp });
+      // response.data.data = { token, user }
+      return response.data.data;
+    } catch (error) {
+      const message =
+        error.response?.data?.message || 'Invalid or expired OTP.';
+      return rejectWithValue(message);
+    }
+  }
+);
+
 // ─── Slice ─────────────────────────────────────────────────────────────────────
 const authSlice = createSlice({
   name: 'auth',
@@ -77,6 +114,7 @@ const authSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      // Login
       .addCase(loginUser.pending, (state) => {
         state.isLoading = true;
         state.error     = null;
@@ -92,6 +130,38 @@ const authSlice = createSlice({
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ token, user }));
       })
       .addCase(loginUser.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error     = action.payload;
+      })
+      // Send OTP
+      .addCase(sendOtp.pending, (state) => {
+        state.isLoading = true;
+        state.error     = null;
+      })
+      .addCase(sendOtp.fulfilled, (state) => {
+        state.isLoading = false;
+        state.error     = null;
+      })
+      .addCase(sendOtp.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error     = action.payload;
+      })
+      // Verify OTP
+      .addCase(verifyOtp.pending, (state) => {
+        state.isLoading = true;
+        state.error     = null;
+      })
+      .addCase(verifyOtp.fulfilled, (state, action) => {
+        const { token, user } = action.payload;
+        state.token           = token;
+        state.user            = user;
+        state.isAuthenticated = true;
+        state.isLoading       = false;
+        state.error           = null;
+        // Persist to localStorage so page refresh doesn't log user out
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ token, user }));
+      })
+      .addCase(verifyOtp.rejected, (state, action) => {
         state.isLoading = false;
         state.error     = action.payload;
       });

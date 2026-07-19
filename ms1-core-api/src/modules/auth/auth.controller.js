@@ -24,4 +24,30 @@ const login = async (req, res, next) => {
   }
 };
 
-module.exports = { login };
+// POST /api/auth/send-otp
+const sendOTP = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    const data = await authService.sendOTP(email);
+
+    return sendResponse(res, 200, true, 'OTP sent successfully', data);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/auth/verify-otp
+const verifyOTPAndLogin = async (req, res, next) => {
+  try {
+    const { email, otp } = req.body;
+
+    const data = await authService.verifyOTPAndLogin(email, otp);
+
+    return sendResponse(res, 200, true, 'Login successful', data);
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { login, sendOTP, verifyOTPAndLogin };

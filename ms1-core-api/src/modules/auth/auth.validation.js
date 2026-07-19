@@ -15,4 +15,19 @@ const loginSchema = z.object({
     .min(1, 'Password cannot be empty'),
 });
 
-module.exports = { loginSchema };
+const sendOTPSchema = z.object({
+  email: z
+    .string({ required_error: 'Email is required' })
+    .email('Please provide a valid email address'),
+});
+
+const verifyOTPSchema = z.object({
+  email: z
+    .string({ required_error: 'Email is required' })
+    .email('Please provide a valid email address'),
+  otp: z
+    .string({ required_error: 'OTP is required' })
+    .length(6, 'OTP must be 6 digits'),
+});
+
+module.exports = { loginSchema, sendOTPSchema, verifyOTPSchema };

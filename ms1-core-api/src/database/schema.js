@@ -169,6 +169,19 @@ const orderStatusHistory = pgTable('order_status_history', {
   changedAt: timestamp('changed_at').defaultNow().notNull(),
 });
 
+// ─── 10. OTP Codes ─────────────────────────────────────────────────────────────
+// Stores OTP codes for email-based authentication.
+// Each OTP is valid for 5 minutes and can only be used once.
+
+const otpCodes = pgTable('otp_codes', {
+  id:        uuid('id').defaultRandom().primaryKey(),
+  email:     text('email').notNull(),
+  otp:       text('otp').notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+  used:      boolean('used').notNull().default(false),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 // ─── Relations ────────────────────────────────────────────────────────────────
 // Relations tell Drizzle how tables relate for the db.query.* relational API.
 // These do NOT create SQL constraints — foreign key columns above handle that.
@@ -271,6 +284,7 @@ module.exports = {
   orders,
   orderItems,
   orderStatusHistory,
+  otpCodes,
 
   // Relations
   usersRelations,

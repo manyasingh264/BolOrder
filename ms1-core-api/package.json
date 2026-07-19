@@ -12,6 +12,7 @@
     "db:seed": "node src/database/seeds/seed.js"
   },
   "dependencies": {
+    "@aws-sdk/client-ses": "^3.1090.0",
     "axios": "^1.7.2",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",

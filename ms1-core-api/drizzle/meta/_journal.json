@@ -15,6 +15,13 @@
       "when": 1784197130699,
       "tag": "0001_kind_phantom_reporter",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784489595892,
+      "tag": "0002_nasty_rictor",
+      "breakpoints": true
     }
   ]
 }
