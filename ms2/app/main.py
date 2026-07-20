@@ -1,12 +1,27 @@
+import time
+import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.starlette import StarletteIntegration
 
 from app.config import settings
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# ── Sentry ────────────────────────────────────────────────────────
+sentry_sdk.init(
+    dsn=settings.SENTRY_DSN,
+    environment=settings.APP_ENV,
+    integrations=[StarletteIntegration(), FastApiIntegration()],
+    traces_sample_rate=1.0,
+    send_default_pii=True,
+)
 
 
 @asynccontextmanager
@@ -46,7 +61,6 @@ async def lifespan(app: FastAPI):
     from app.graph.builder import build_graph
     app.state.graph = build_graph()
     logger.info("LangGraph compiled.")
-
     logger.info(
         f"MS2 ready | port={settings.PORT} | MS1={settings.MS1_BASE_URL} | "
         f"LLM={settings.MODEL_PROVIDER}/{settings.MODEL_NAME}"
@@ -85,6 +99,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── Request Logging ────────────────────────────────────────────
+# Logs one JSON line per request: id, method, path, status, duration_ms.
+# Reads X-Request-ID from upstream (ms1/nginx) if present, so a single
+# request can be traced across both services using the same id.
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    request_id = request.headers.get("x-request-id", str(uuid.uuid4()))
+    start = time.time()
+    response = await call_next(request)
+    duration_ms = round((time.time() - start) * 1000, 2)
+    logger.info(
+        "request",
+        extra={
+            "request_id": request_id,
+            "method": request.method,
+            "path": request.url.path,
+            "status": response.status_code,
+            "duration_ms": duration_ms,
+        },
+    )
+    response.headers["X-Request-ID"] = request_id
+    return response
+
 # ── Routers ─────────────────────────────────────────────────────
 from app.api.health       import router as health_router
 from app.api.voice        import router as voice_router          # legacy /voice/ping
@@ -93,3 +130,5 @@ from app.api.conversation import router as conversation_router   # Step 10
 app.include_router(health_router,      prefix="/api/v1")
 app.include_router(voice_router,       prefix="/api/v1")
 app.include_router(conversation_router, prefix="/api/v1")
+
+

@@ -49,6 +49,7 @@ class Settings(BaseSettings):
 
     # ── CORS ─────────────────────────────────────────────────────
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+    SENTRY_DSN: str = ""
 
     @property
     def cors_origins_list(self) -> list[str]:

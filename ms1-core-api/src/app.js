@@ -9,9 +9,20 @@
 // It does NOT start the server (that's server.js's job).
 // It exports `app` so server.js can call app.listen().
 
+// ─── Sentry (MUST be initialized before anything else) ───────────────────────
+const Sentry = require('@sentry/node');
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  environment: process.env.NODE_ENV || 'development',
+  tracesSampleRate: 1.0,
+  sendDefaultPii: true,
+});
+
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
+const { randomUUID } = require('crypto');
 
 const routes = require('./routes');
 const errorHandler = require('./middleware/errorHandler.middleware');
@@ -33,13 +44,37 @@ app.use(cors({
   credentials: true,
 }));
 
-// HTTP request logger — logs method, URL, status code, and response time
-// 'dev' format: GET /api/health 200 2.456 ms
-app.use(morgan('dev'));
+// ─── Request ID ───────────────────────────────────────────────────────────────
+// Attaches a unique ID to every request (or reuses one passed in from upstream,
+// e.g. from ms2 or nginx). Sent back in the response so it can be traced across
+// services and matched against logs on both ms1 and ms2.
+app.use((req, res, next) => {
+  req.requestId = req.headers['x-request-id'] || randomUUID();
+  res.setHeader('X-Request-ID', req.requestId);
+  next();
+});
+
+// ─── Structured Request Logging ───────────────────────────────────────────────
+// Logs one JSON line per request: id, method, url, status, duration_ms, timestamp.
+// Machine-parseable — ready to ship to CloudWatch or any log aggregator later.
+morgan.token('id', (req) => req.requestId);
+
+
+app.use(morgan((tokens, req, res) => {
+  return JSON.stringify({
+    id: tokens.id(req, res),
+    method: tokens.method(req, res),
+    url: tokens.url(req, res),
+    status: Number(tokens.status(req, res)),
+    duration_ms: Number(tokens['response-time'](req, res)),
+    timestamp: new Date().toISOString(),
+  });
+}));
 
 // ─── API Routes ───────────────────────────────────────────────────────────────
 // All routes are namespaced under /api
 // e.g. /api/health, /api/auth/login, /api/orders
+
 app.use('/api', routes);
 
 // ─── 404 Handler ─────────────────────────────────────────────────────────────
@@ -51,6 +86,11 @@ app.use((req, res) => {
     message: `Cannot ${req.method} ${req.originalUrl}`,
   });
 });
+
+// ─── Sentry Error Handler ──────────────────────────────────────────────────────
+// Must be registered AFTER routes/404, but BEFORE your own error handler,
+// so Sentry captures the error before your custom handler formats the response.
+Sentry.setupExpressErrorHandler(app);
 
 // ─── Centralized Error Handler ────────────────────────────────────────────────
 // MUST be registered last. Express identifies error handlers by the 4-parameter
