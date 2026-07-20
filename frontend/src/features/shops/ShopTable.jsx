@@ -12,7 +12,7 @@ const COLUMNS = (onEdit, onDelete) => [
   },
   { header: 'Owner',   accessor: 'ownerName',   render: (v) => v ?? '—' },
   { header: 'Phone',   accessor: 'phone',        render: (v) => <span className="font-mono text-xs">{v ?? '—'}</span> },
-  { header: 'Area',    accessor: 'area',         render: (v) => v ?? '—' },
+  { header: 'Address', accessor: 'address',      render: (v) => v ?? '—' },
   { header: 'Salesman', accessor: 'salesman', render: (v) => v?.name ?? '—' },
   { header: 'Status',  accessor: 'isVerified',     render: (v) => <ActiveBadge isActive={v} /> },
   {

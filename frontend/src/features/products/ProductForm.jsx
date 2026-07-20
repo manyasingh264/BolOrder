@@ -12,17 +12,16 @@ import Modal from '../../components/Modal/Modal';
 import { Plus, X } from 'lucide-react';
 
 const variantSchema = z.object({
-  size:  z.string().optional(),
+  size:  z.string().regex(/^\d*\.?\d*$/, 'Size must be a number').optional(),
   unit:  z.string().min(1, 'Unit is required'),
-  sku:   z.string().optional(),
+  sku:   z.string().regex(/^[a-zA-Z0-9-_]*$/, 'SKU must be alphanumeric').optional(),
   price: z.string().min(1, 'Price is required'),
 });
 
 const schema = z.object({
   name:        z.string().min(2, 'Product name is required'),
   description: z.string().optional(),
-  category:    z.string().optional(),
-  variants:    z.array(variantSchema).optional(),
+  variants:    z.array(variantSchema).min(1, 'At least one variant is required'),
   isActive:    z.boolean().optional(),
 });
 
@@ -36,7 +35,6 @@ const ProductForm = ({ isOpen, onClose, editProduct }) => {
     defaultValues: {
       name: '',
       description: '',
-      category: '',
       variants: [{ size: '', unit: 'g', sku: '', price: '' }],
     },
   });
@@ -52,7 +50,6 @@ const ProductForm = ({ isOpen, onClose, editProduct }) => {
         reset({
           name: editProduct.name,
           description: editProduct.description,
-          category: editProduct.category,
           variants: editProduct.variants?.length > 0 ? editProduct.variants : [{ size: '', unit: 'g', sku: '', price: '' }],
           isActive: editProduct.isActive ?? true,
         });
@@ -60,7 +57,6 @@ const ProductForm = ({ isOpen, onClose, editProduct }) => {
         reset({
           name: '',
           description: '',
-          category: '',
           variants: [{ size: '', unit: 'g', sku: '', price: '' }],
           isActive: true,
         });
@@ -69,7 +65,16 @@ const ProductForm = ({ isOpen, onClose, editProduct }) => {
   }, [isOpen, editProduct, reset]);
 
   const onSubmit = async (data) => {
-    const action  = isEdit ? updateProduct({ id: editProduct.id, data }) : createProduct(data);
+    // Convert price from string to number for backend
+    const processedData = {
+      ...data,
+      variants: data.variants?.map(v => ({
+        ...v,
+        price: parseFloat(v.price)
+      }))
+    };
+
+    const action  = isEdit ? updateProduct({ id: editProduct.id, data: processedData }) : createProduct(processedData);
     const result  = await dispatch(action);
     const creator = isEdit ? updateProduct : createProduct;
     if (creator.fulfilled.match(result)) {
@@ -85,7 +90,6 @@ const ProductForm = ({ isOpen, onClose, editProduct }) => {
       <div className="max-h-[70vh] overflow-y-auto pr-2">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <Input label="Product Name" required placeholder="e.g. Aloo Bhujia" error={errors.name?.message} {...register('name')} />
-          <Input label="Category" placeholder="e.g. Bhujia, Mixture, Namkeen" {...register('category')} />
           <div>
             <label className="label-base">Description</label>
             <textarea className="input-base" rows={3} placeholder="Optional product description" {...register('description')} />
@@ -124,6 +128,9 @@ const ProductForm = ({ isOpen, onClose, editProduct }) => {
                       placeholder="e.g. 200"
                       className="w-full px-3 py-2 border border-surface-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
                     />
+                    {errors.variants?.[index]?.size && (
+                      <p className="text-xs text-red-500 mt-1">{errors.variants[index].size.message}</p>
+                    )}
                   </div>
                   <div>
                     <label className="text-xs font-medium text-surface-700 mb-1 block">Unit</label>
@@ -146,6 +153,9 @@ const ProductForm = ({ isOpen, onClose, editProduct }) => {
                       placeholder="e.g. AB-200G"
                       className="w-full px-3 py-2 border border-surface-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
                     />
+                    {errors.variants?.[index]?.sku && (
+                      <p className="text-xs text-red-500 mt-1">{errors.variants[index].sku.message}</p>
+                    )}
                   </div>
                 </div>
                 <div>

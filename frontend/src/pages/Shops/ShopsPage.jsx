@@ -35,7 +35,7 @@ const ShopsPage = () => {
 
   const filtered = shops.filter((s) => {
     const q = debouncedSearch.toLowerCase();
-    return s.name?.toLowerCase().includes(q) || s.area?.toLowerCase().includes(q) || s.ownerName?.toLowerCase().includes(q);
+    return s.name?.toLowerCase().includes(q) || s.address?.toLowerCase().includes(q) || s.ownerName?.toLowerCase().includes(q);
   });
 
   const pagination = usePagination(filtered, 10);

@@ -73,7 +73,7 @@ const updateUser = async (id, updateData, requestingUserId) => {
     throw new AppError('You cannot deactivate your own account', 400);
   }
 
-  // Rule: If email is being changed, check it isn't already taken
+  // Rule: If email is being changed, check it isn't already taken by another active user
   if (updateData.email) {
     const emailTaken = await usersRepository.findUserByEmail(updateData.email);
     if (emailTaken && emailTaken.id !== id) {
@@ -104,8 +104,10 @@ const deleteUser = async (id, requestingUserId) => {
     throw new AppError('You cannot delete your own account', 400);
   }
 
-  // Soft delete by setting isActive to false
-  await usersRepository.updateUser(id, { isActive: false });
+  // Soft delete by setting isActive to false and modifying email to free it up
+  // Append _deleted_timestamp to email to allow email reuse while preserving data
+  const deletedEmail = `${existingUser.email}_deleted_${Date.now()}`;
+  await usersRepository.updateUser(id, { isActive: false, email: deletedEmail });
   return { message: 'User deleted successfully' };
 };
 

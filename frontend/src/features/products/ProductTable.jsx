@@ -11,11 +11,8 @@ const COLUMNS = (onEdit, onDelete) => [
   {
     header: 'Product',
     accessor: 'name',
-    render: (val, row) => (
-      <div>
-        <p className="font-semibold text-surface-800">{val}</p>
-        <p className="text-2xs text-surface-400 mt-0.5">{row.category ?? '—'}</p>
-      </div>
+    render: (val) => (
+      <p className="font-semibold text-surface-800">{val}</p>
     ),
   },
   {
@@ -29,11 +26,6 @@ const COLUMNS = (onEdit, onDelete) => [
         {variants?.length > 2 && <p className="text-2xs text-surface-400">+{variants.length - 2} more</p>}
       </div>
     ),
-  },
-  {
-    header: 'Aliases',
-    accessor: 'aliases',
-    render: (aliases) => <span className="text-xs text-surface-500">{aliases?.length > 0 ? aliases.slice(0,2).join(', ') : '—'}</span>,
   },
   { header: 'Status',  accessor: 'isActive', render: (v) => <ActiveBadge isActive={v} /> },
   {

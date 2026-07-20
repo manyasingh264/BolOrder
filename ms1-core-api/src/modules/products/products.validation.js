@@ -10,6 +10,12 @@ const createProductSchema = z.object({
 
   category:    z.string().optional(),
   description: z.string().optional(),
+  variants: z.array(z.object({
+    size: z.string().regex(/^\d*\.?\d*$/, 'Size must be a number').optional(),
+    unit: z.string().min(1, 'Unit is required'),
+    sku: z.string().regex(/^[a-zA-Z0-9-_]*$/, 'SKU must be alphanumeric').optional(),
+    price: z.number({ required_error: 'Price is required', invalid_type_error: 'Price must be a number' }).positive('Price must be greater than 0'),
+  })).min(1, 'At least one variant is required'),
 });
 
 const updateProductSchema = z.object({

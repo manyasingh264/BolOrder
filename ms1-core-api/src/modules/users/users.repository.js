@@ -4,7 +4,7 @@
 //            Password hashes must NEVER be sent to the frontend.
 //            Only auth.repository.js includes passwordHash (for login verification).
 
-const { eq, ne } = require('drizzle-orm');
+const { eq, ne, and } = require('drizzle-orm');
 const { db } = require('../../database/db');
 const { users } = require('../../database/schema');
 
@@ -20,9 +20,9 @@ const SAFE_COLUMNS = {
   updatedAt: users.updatedAt,
 };
 
-// Get all users (safe columns only)
+// Get all users (safe columns only, only active users)
 const findAllUsers = async () => {
-  return db.select(SAFE_COLUMNS).from(users);
+  return db.select(SAFE_COLUMNS).from(users).where(eq(users.isActive, true));
 };
 
 // Get one user by ID (safe columns only)
@@ -37,11 +37,12 @@ const findUserById = async (id) => {
 };
 
 // Check if an email is already taken (used before creating/updating)
+// Only checks active users to allow reusing emails from deleted accounts
 const findUserByEmail = async (email) => {
   const result = await db
     .select({ id: users.id })
     .from(users)
-    .where(eq(users.email, email))
+    .where(and(eq(users.email, email), eq(users.isActive, true)))
     .limit(1);
 
   return result[0] || null;
