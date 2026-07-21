@@ -10,10 +10,11 @@ const { eq } = require('drizzle-orm');
 const { db } = require('../../database/db');
 const { customerShops, shopAliases } = require('../../database/schema');
 
-// Get every shop (used by ADMIN and SUPERVISOR)
+// Get every shop (used by ADMIN and SUPERVISOR) - only active shops
 const findAllShops = async () => {
   return db.query.customerShops.findMany({
-    with: { 
+    where: (customerShops, { eq }) => eq(customerShops.isActive, true),
+    with: {
       aliases: true,
       salesman: true,
     },
@@ -21,11 +22,14 @@ const findAllShops = async () => {
   });
 };
 
-// Get only the shops assigned to a specific salesman
+// Get only the shops assigned to a specific salesman - only active shops
 const findShopsBySalesmanId = async (salesmanId) => {
   return db.query.customerShops.findMany({
-    where: (customerShops, { eq }) => eq(customerShops.salesmanId, salesmanId),
-    with: { 
+    where: (customerShops, { and, eq }) => and(
+      eq(customerShops.salesmanId, salesmanId),
+      eq(customerShops.isActive, true)
+    ),
+    with: {
       aliases: true,
       salesman: true,
     },
@@ -75,11 +79,15 @@ const createAlias = async (aliasData) => {
   return result[0];
 };
 
-// Delete a shop by ID
+// Soft delete a shop by ID (set isActive = false)
 const deleteShop = async (id) => {
-  await db
-    .delete(customerShops)
-    .where(eq(customerShops.id, id));
+  const result = await db
+    .update(customerShops)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(eq(customerShops.id, id))
+    .returning();
+
+  return result[0] || null;
 };
 
 module.exports = {

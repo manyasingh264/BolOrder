@@ -70,6 +70,7 @@ const customerShops = pgTable('customer_shops', {
   phone:      text('phone'),
   address:    text('address'),
   isVerified: boolean('is_verified').default(false).notNull(),
+  isActive:   boolean('is_active').default(true).notNull(),
   salesmanId: uuid('salesman_id').references(() => users.id, { onDelete: 'set null' }),
   createdAt:  timestamp('created_at').defaultNow().notNull(),
   updatedAt:  timestamp('updated_at').defaultNow().notNull(),

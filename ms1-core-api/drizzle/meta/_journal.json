@@ -22,6 +22,13 @@
       "when": 1784489595892,
       "tag": "0002_nasty_rictor",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1784616364003,
+      "tag": "0003_aromatic_giant_girl",
+      "breakpoints": true
     }
   ]
 }
