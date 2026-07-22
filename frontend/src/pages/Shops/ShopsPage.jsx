@@ -67,7 +67,7 @@ const ShopsPage = () => {
               <Store size={20} className="text-primary-500" />
               <h1 className="page-title">Shops</h1>
             </div>
-            <p className="page-subtitle">{shops.length} shops registered</p>
+            <p className="page-subtitle">{shops.length} shops</p>
           </div>
           {canCreateShop && (
             <Button variant="primary" leftIcon={<PlusCircle size={16} />} onClick={() => { setEditShop(null); setFormOpen(true); }} id="create-shop-btn">

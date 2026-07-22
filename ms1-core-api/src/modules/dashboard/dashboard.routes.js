@@ -37,4 +37,8 @@ router.get('/top-products', dashboardController.getTopProducts);
 // Returns: per-salesman stats (total orders, delivered, revenue, shops)
 router.get('/salesman-performance', dashboardController.getSalesmanPerformance);
 
+// GET /api/dashboard/salesmen/:id/performance
+// Returns: full performance data for a single salesman (profile, stats, shops, orders, insights)
+router.get('/salesmen/:id/performance', dashboardController.getSalesmanPerformanceById);
+
 module.exports = router;

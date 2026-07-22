@@ -7,9 +7,8 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
-import { Menu, LogOut, User, ChevronDown, Bell, Mic } from 'lucide-react';
-import { toggleSidebar, selectSidebarOpen } from '../../redux/slices/uiSlice';
+import { useDispatch } from 'react-redux';
+import { LogOut, User, ChevronDown } from 'lucide-react';
 import { logout } from '../../redux/slices/authSlice';
 import { ROUTES, ROLE_LABELS } from '../../constants';
 import { getInitials } from '../../utils';
@@ -20,7 +19,6 @@ const Navbar = ({ title }) => {
   const navigate          = useNavigate();
   const { user, role }    = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const sidebarOpen       = useSelector(selectSidebarOpen);
 
   const handleLogout = () => {
     dispatch(logout());
@@ -30,27 +28,6 @@ const Navbar = ({ title }) => {
   return (
     <header className="h-16 bg-white border-b border-surface-200 shadow-navbar flex items-center px-4 gap-3 flex-shrink-0">
 
-      {/* Sidebar toggle button - Mic icon on mobile/tablet, Menu on desktop */}
-      <button
-        onClick={() => dispatch(toggleSidebar())}
-        className="btn-icon lg:hidden"
-        aria-label="Toggle sidebar"
-        aria-expanded={sidebarOpen}
-        id="sidebar-toggle-btn"
-      >
-        <Mic size={20} className="text-primary-500" />
-      </button>
-
-      {/* Desktop sidebar toggle (for collapse functionality if needed) */}
-      <button
-        onClick={() => dispatch(toggleSidebar())}
-        className="btn-icon hidden lg:block"
-        aria-label="Toggle sidebar"
-        id="sidebar-toggle-btn-desktop"
-      >
-        <Menu size={20} />
-      </button>
-
       {/* Page title */}
       {title && (
         <h2 className="text-base font-semibold text-surface-800 hidden sm:block">{title}</h2>
@@ -58,11 +35,6 @@ const Navbar = ({ title }) => {
 
       {/* Spacer */}
       <div className="flex-1" />
-
-      {/* Notification bell (placeholder — future feature) */}
-      <button className="btn-icon relative" aria-label="Notifications">
-        <Bell size={18} />
-      </button>
 
       {/* User avatar + dropdown */}
       <div className="relative">

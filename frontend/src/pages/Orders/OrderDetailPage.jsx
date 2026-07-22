@@ -64,7 +64,6 @@ const OrderDetailPage = () => {
                     ['Shop',      order.shopName],
                     ['Salesman',  order.salesmanName],
                     ['Area',      order.shopArea],
-                    ['AI Transcript', order.rawTranscript ? `${order.rawTranscript.slice(0,60)}…` : 'N/A'],
                   ].map(([label, val]) => (
                     <div key={label}>
                       <dt className="text-surface-400 text-xs font-medium uppercase tracking-wider">{label}</dt>
@@ -81,24 +80,26 @@ const OrderDetailPage = () => {
                 <h2 className="text-base font-semibold">Order Items</h2>
                 <span className="text-sm text-surface-400">{order.items?.length ?? 0} items</span>
               </Card.Header>
-              <div className="divide-y divide-surface-100">
-                {order.items?.map((item, i) => (
-                  <div key={i} className="px-6 py-3.5 flex justify-between items-center">
-                    <div>
-                      <p className="text-sm font-medium text-surface-800">{item.productName}</p>
-                      <p className="text-xs text-surface-400 mt-0.5">{item.variantSize ?? item.unit} · {formatCurrency(item.unitPrice)} each</p>
+              <Card.Body>
+                <div className="divide-y divide-surface-100">
+                  {order.items?.map((item, i) => (
+                    <div key={i} className="py-3.5 flex justify-between items-center">
+                      <div>
+                        <p className="text-sm font-medium text-surface-800">{item.productName}</p>
+                        <p className="text-xs text-surface-400 mt-0.5">{item.variantSize ?? item.unit} · {formatCurrency(item.unitPrice)} each</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-surface-500">×{item.quantity}</p>
+                        <p className="text-sm font-semibold text-surface-900">{formatCurrency(item.subtotal)}</p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm text-surface-500">×{item.quantity}</p>
-                      <p className="text-sm font-semibold text-surface-900">{formatCurrency(item.subtotal)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="px-6 py-4 border-t border-surface-200 flex justify-between">
-                <span className="font-semibold text-surface-700">Total</span>
-                <span className="font-bold text-lg text-surface-900">{formatCurrency(order.totalAmount)}</span>
-              </div>
+                  ))}
+                </div>
+                <div className="pt-4 border-t border-surface-200 flex justify-between">
+                  <span className="font-semibold text-surface-700">Total</span>
+                  <span className="font-bold text-lg text-surface-900">{formatCurrency(order.totalAmount)}</span>
+                </div>
+              </Card.Body>
             </Card>
           </div>
 

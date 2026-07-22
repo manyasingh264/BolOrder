@@ -33,6 +33,7 @@ const getAllOrders = async (requestingUser) => {
     return {
       ...order,
       shopName: order.shop?.shopName || null,
+      shopArea: order.shop?.address || null,
       salesmanName: order.salesman?.name || null,
       itemCount,
       totalAmount,
@@ -64,12 +65,22 @@ const getOrderById = async (id, requestingUser) => {
     return sum + subtotal;
   }, 0) || 0;
 
+  // Flatten items structure
+  const items = order.items?.map(item => ({
+    ...item,
+    productName: item.productVariant?.product?.name || null,
+    variantSize: item.productVariant?.size || null,
+    unit: item.productVariant?.unit || null,
+  })) || [];
+
   return {
     ...order,
     shopName: order.shop?.shopName || null,
+    shopArea: order.shop?.address || null,
     salesmanName: order.salesman?.name || null,
     itemCount,
     totalAmount,
+    items,
   };
 };
 

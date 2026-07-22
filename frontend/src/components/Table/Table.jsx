@@ -24,6 +24,7 @@ const Table = ({
   emptyIcon,
   onRowClick,
   keyExtractor = (row) => row.id,
+  stickyHeader = false,
 }) => {
   if (isLoading) {
     return <TableSkeleton columns={columns.length} />;
@@ -43,7 +44,7 @@ const Table = ({
     <div className="table-wrapper">
       <table className="table-base">
         {/* Header */}
-        <thead>
+        <thead className={stickyHeader ? 'sticky top-0 bg-white z-10' : ''}>
           <tr>
             {columns.map((col, idx) => (
               <th key={idx} className="table-th" style={col.width ? { width: col.width } : {}}>

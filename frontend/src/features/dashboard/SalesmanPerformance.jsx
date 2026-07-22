@@ -3,11 +3,17 @@
 // Why it exists: Supervisors/Admins need a quick view of each salesman's KPIs.
 // Responsibility: Render a ranked list of salesmen with order count + revenue.
 // Used by: DashboardPage.jsx (ADMIN + SUPERVISOR only)
+//
+// Change: Each row is now clickable — navigates to /admin/salesmen/:id
 
-import { TrendingUp, User } from 'lucide-react';
+import { TrendingUp } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { formatCurrency, getInitials } from '../../utils';
+import { buildRoute } from '../../constants';
 
 const SalesmanPerformance = ({ data, isLoading }) => {
+  const navigate = useNavigate();
+
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -39,7 +45,13 @@ const SalesmanPerformance = ({ data, isLoading }) => {
       {data.map((salesman, idx) => (
         <div
           key={salesman.id || idx}
-          className="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-50 transition-colors"
+          className="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-50 transition-colors cursor-pointer"
+          onClick={() => navigate(buildRoute.salesmanDetail(salesman.id))}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === 'Enter' && navigate(buildRoute.salesmanDetail(salesman.id))}
+          aria-label={`View details for ${salesman.name}`}
+          id={`salesman-row-${salesman.id || idx}`}
         >
           {/* Rank + avatar */}
           <div className="relative flex-shrink-0">

@@ -13,16 +13,17 @@ import { ROUTES, ROLES } from '../constants';
 import { selectIsAuthenticated, selectCurrentUser } from '../redux/slices/authSlice';
 
 // Pages (lazy imports can be added later for code-splitting)
-import LoginPage         from '../pages/Login/LoginPage';
-import DashboardPage     from '../pages/Dashboard/DashboardPage';
-import UsersPage         from '../pages/Users/UsersPage';
-import ProductsPage      from '../pages/Products/ProductsPage';
-import ShopsPage         from '../pages/Shops/ShopsPage';
-import OrdersPage        from '../pages/Orders/OrdersPage';
-import OrderDetailPage   from '../pages/Orders/OrderDetailPage';
-import VoiceOrderPage    from '../pages/VoiceOrder/VoiceOrderPage';
-import ProfilePage       from '../pages/Profile/ProfilePage';
-import UnauthorizedPage  from '../pages/Unauthorized/UnauthorizedPage';
+import LoginPage          from '../pages/Login/LoginPage';
+import DashboardPage      from '../pages/Dashboard/DashboardPage';
+import SalesmanDetailPage from '../pages/Dashboard/SalesmanDetailPage';
+import UsersPage          from '../pages/Users/UsersPage';
+import ProductsPage       from '../pages/Products/ProductsPage';
+import ShopsPage          from '../pages/Shops/ShopsPage';
+import OrdersPage         from '../pages/Orders/OrdersPage';
+import OrderDetailPage    from '../pages/Orders/OrderDetailPage';
+import VoiceOrderPage     from '../pages/VoiceOrder/VoiceOrderPage';
+import ProfilePage        from '../pages/Profile/ProfilePage';
+import UnauthorizedPage   from '../pages/Unauthorized/UnauthorizedPage';
 
 const ALL_ROLES = [ROLES.ADMIN, ROLES.SUPERVISOR, ROLES.SALESMAN];
 
@@ -59,6 +60,16 @@ const AppRouter = () => {
         element={
           <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.SUPERVISOR]}>
             <DashboardPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ── Salesman Performance Detail — ADMIN + SUPERVISOR only ──────── */}
+      <Route
+        path={ROUTES.SALESMAN_DETAIL}
+        element={
+          <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.SUPERVISOR]}>
+            <SalesmanDetailPage />
           </ProtectedRoute>
         }
       />

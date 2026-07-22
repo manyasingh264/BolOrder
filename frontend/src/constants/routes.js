@@ -3,19 +3,21 @@
 // Always import from here so renaming a route is a single change.
 
 export const ROUTES = {
-  LOGIN:        '/login',
-  DASHBOARD:    '/dashboard',
-  USERS:        '/users',
-  PRODUCTS:     '/products',
-  SHOPS:        '/shops',
-  ORDERS:       '/orders',
-  ORDER_DETAIL: '/orders/:id',
-  VOICE_ORDER:  '/voice-order',
-  PROFILE:      '/profile',
-  UNAUTHORIZED: '/unauthorized',
+  LOGIN:           '/login',
+  DASHBOARD:       '/dashboard',
+  USERS:           '/users',
+  PRODUCTS:        '/products',
+  SHOPS:           '/shops',
+  ORDERS:          '/orders',
+  ORDER_DETAIL:    '/orders/:id',
+  VOICE_ORDER:     '/voice-order',
+  PROFILE:         '/profile',
+  UNAUTHORIZED:    '/unauthorized',
+  SALESMAN_DETAIL: '/admin/salesmen/:salesmanId',
 };
 
 // Helper to build dynamic routes
 export const buildRoute = {
-  orderDetail: (id) => `/orders/${id}`,
+  orderDetail:    (id) => `/orders/${id}`,
+  salesmanDetail: (id) => `/admin/salesmen/${id}`,
 };

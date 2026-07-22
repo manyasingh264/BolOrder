@@ -18,8 +18,8 @@ const getSummary = async () => {
     totalRevenue: parseFloat(revenue.total_revenue).toFixed(2),
     totalShops: parseInt(catalog.total_shops, 10),
     totalProducts: parseInt(catalog.total_products, 10),
-    totalUsers: parseInt(users.total_users, 10),
-    pendingOrders: parseInt(orders.pending_confirmation, 10) + parseInt(orders.confirmed, 10),
+    totalUsers: parseInt(users.active_users, 10),
+    pendingOrders: parseInt(orders.pending_confirmation, 10),
 
     // Keep nested structure for other uses
     orders: {
@@ -53,8 +53,8 @@ const getSummary = async () => {
 
 // ─── GET /api/dashboard/orders/recent ─────────────────────────────────────────
 
-const getRecentOrders = async () => {
-  const rows = await dashboardRepository.getRecentOrders(10);
+const getRecentOrders = async (limit = 20) => {
+  const rows = await dashboardRepository.getRecentOrders(limit);
 
   return rows.map(row => ({
     id:            row.id,
@@ -108,4 +108,80 @@ const getSalesmanPerformance = async () => {
   }));
 };
 
-module.exports = { getSummary, getRecentOrders, getTopProducts, getSalesmanPerformance };
+// ─── GET /api/dashboard/salesmen/:id/performance ─────────────────────────────
+
+const getSalesmanPerformanceById = async (id, filters = {}) => {
+  const data = await dashboardRepository.getSalesmanPerformanceById(id, filters);
+
+  if (!data) return null;
+
+  const { salesman, stats, assignedShops, orders, totalOrders, insights } = data;
+
+  const totalOrders_   = parseInt(stats.total_orders,     10);
+  const totalRevenue_  = parseFloat(stats.total_revenue ?? 0);
+
+  return {
+    salesman: {
+      id:       salesman.id,
+      name:     salesman.name,
+      email:    salesman.email,
+      phone:    salesman.phone,
+      isActive: salesman.is_active,
+      joinedAt: salesman.created_at,
+    },
+    stats: {
+      totalOrders:       totalOrders_,
+      completedOrders:   parseInt(stats.completed_orders || 0, 10),
+      pendingOrders:     parseInt(stats.pending_orders || 0,   10),
+      confirmedOrders:   parseInt(stats.confirmed_orders || 0, 10),
+      cancelledOrders:   parseInt(stats.cancelled_orders || 0, 10),
+      totalRevenue:      totalRevenue_.toFixed(2),
+      averageOrderValue: totalOrders_ > 0
+        ? (totalRevenue_ / totalOrders_).toFixed(2)
+        : '0.00',
+      assignedShops:     parseInt(stats.assigned_shops || 0,   10),
+    },
+    assignedShops: assignedShops.map(s => ({
+      shopId:        s.shop_id,
+      shopName:      s.shop_name,
+      owner:         s.owner_name,
+      phone:         s.phone,
+      address:       s.address,
+      totalOrders:   parseInt(s.total_orders,  10),
+      totalRevenue:  parseFloat(s.total_revenue ?? 0).toFixed(2),
+      lastOrderDate: s.last_order_date,
+    })),
+    orders: {
+      data: orders.map(o => ({
+        orderId:     o.id,
+        date:        o.created_at,
+        shop:        o.shop_name,
+        items:       parseInt(o.item_count, 10),
+        amount:      parseFloat(o.order_total ?? 0).toFixed(2),
+        status:      o.status,
+      })),
+      pagination: {
+        page:       filters.page  || 1,
+        limit:      filters.limit || 10,
+        total:      totalOrders,
+        totalPages: Math.ceil(totalOrders / (filters.limit || 10)),
+      },
+    },
+    insights: {
+      highestSellingProduct: insights.highest_selling_product ?? null,
+      bestMonth:             insights.best_month             ?? null,
+      largestOrder:          insights.largest_order
+        ? parseFloat(insights.largest_order).toFixed(2)
+        : null,
+      mostActiveShop:        insights.most_active_shop       ?? null,
+      completionRate:        totalOrders_ > 0
+        ? ((parseInt(stats.completed_orders, 10) / totalOrders_) * 100).toFixed(1)
+        : '0.0',
+      avgRevenuePerShop:     parseInt(stats.assigned_shops, 10) > 0
+        ? (totalRevenue_ / parseInt(stats.assigned_shops, 10)).toFixed(2)
+        : '0.00',
+    },
+  };
+};
+
+module.exports = { getSummary, getRecentOrders, getTopProducts, getSalesmanPerformance, getSalesmanPerformanceById };

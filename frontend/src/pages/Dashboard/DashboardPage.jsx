@@ -107,7 +107,7 @@ const DashboardPage = () => {
               <Card.Header>
                 <div>
                   <h2 className="text-base font-semibold text-surface-900">Recent Orders</h2>
-                  <p className="text-xs text-surface-400 mt-0.5">Last 10 orders across all salesmen</p>
+                  <p className="text-xs text-surface-400 mt-0.5">Latest orders across all salesmen</p>
                 </div>
               </Card.Header>
               <RecentOrdersTable orders={recentOrders} isLoading={isLoading} />

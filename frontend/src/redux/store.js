@@ -14,25 +14,27 @@
 
 import { configureStore } from '@reduxjs/toolkit';
 
-import authReducer       from './slices/authSlice';
-import uiReducer         from './slices/uiSlice';
-import dashboardReducer  from './slices/dashboardSlice';
-import usersReducer      from './slices/usersSlice';
-import shopsReducer      from './slices/shopsSlice';
-import productsReducer   from './slices/productsSlice';
-import ordersReducer     from './slices/ordersSlice';
-import voiceOrderReducer from './slices/voiceOrderSlice';
+import authReducer           from './slices/authSlice';
+import uiReducer             from './slices/uiSlice';
+import dashboardReducer      from './slices/dashboardSlice';
+import usersReducer          from './slices/usersSlice';
+import shopsReducer          from './slices/shopsSlice';
+import productsReducer       from './slices/productsSlice';
+import ordersReducer         from './slices/ordersSlice';
+import voiceOrderReducer     from './slices/voiceOrderSlice';
+import salesmanDetailReducer from './slices/salesmanDetailSlice';
 
 const store = configureStore({
   reducer: {
-    auth:       authReducer,       // Authentication state
-    ui:         uiReducer,         // Sidebar, toasts, modals
-    dashboard:  dashboardReducer,  // Dashboard stats and charts
-    users:      usersReducer,      // User management (ADMIN only)
-    shops:      shopsReducer,      // Shop management
-    products:   productsReducer,   // Product catalog
-    orders:     ordersReducer,     // Order management
-    voiceOrder: voiceOrderReducer, // AI voice order wizard
+    auth:           authReducer,           // Authentication state
+    ui:             uiReducer,             // Sidebar, toasts, modals
+    dashboard:      dashboardReducer,      // Dashboard stats and charts
+    users:          usersReducer,          // User management (ADMIN only)
+    shops:          shopsReducer,          // Shop management
+    products:       productsReducer,       // Product catalog
+    orders:         ordersReducer,         // Order management
+    voiceOrder:     voiceOrderReducer,     // AI voice order wizard
+    salesmanDetail: salesmanDetailReducer, // Salesman performance detail page
   },
   // Middleware: add custom middleware or keep the defaults (thunk + serializability check)
   middleware: (getDefaultMiddleware) =>
