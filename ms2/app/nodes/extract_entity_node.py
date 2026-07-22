@@ -16,7 +16,7 @@ When it is SKIPPED (returns empty dict):
 """
 
 from app.graph.state import VoiceOrderState
-from app.services.llm_service import LLMService
+from app.services.agent_llm_service import LLMService
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)

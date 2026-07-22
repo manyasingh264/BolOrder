@@ -35,7 +35,9 @@ const config = {
   },
 
   fastapi: {
-    baseUrl: process.env.FASTAPI_BASE_URL || 'http://localhost:8000',
+    baseUrl:             process.env.FASTAPI_BASE_URL || 'http://localhost:8000',
+    serviceSecret:       process.env.MS2_SERVICE_SECRET || '',
+    shopCreationPasscode: process.env.SHOP_CREATION_PASSCODE || '',
   },
 
   upload: {

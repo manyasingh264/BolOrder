@@ -1,6 +1,10 @@
 // pages/VoiceOrder/VoiceOrderPage.jsx — Conversational Voice Order
 // Multi-turn AI conversation with clarifications.
 // Steps: IDLE → RECORDING → RECORDED → PROCESSING → CONVERSATION → PREVIEW → SUBMITTED
+//
+// TTS is client-side now (SpeechSynthesis) — ms2 no longer returns audio_base64.
+// The AI reply arrives as message_en + message_local; we speak & display
+// whichever matches the salesman's selected language.
 
 import { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
@@ -10,6 +14,7 @@ import DashboardLayout from '../../components/Layout/DashboardLayout';
 import Card from '../../components/Card/Card';
 import Button from '../../components/Button/Button';
 import VoicePlayer from '../../components/VoicePlayer/VoicePlayer';
+import LanguageSelect from '../../components/LanguageSelect/LanguageSelect';
 import { StatusBadge } from '../../components/Badge/Badge';
 
 import {
@@ -25,13 +30,16 @@ import {
   selectSessionId,
   selectAiResponse,
   selectConversationLog,
+  selectCreatedOrder,
   selectVoiceLoading,
   selectVoiceError,
   VOICE_STEPS,
 } from '../../redux/slices/voiceOrderSlice';
+import { selectSelectedLanguage } from '../../redux/slices/voiceSettingSlice';
 import { createOrder } from '../../redux/slices/ordersSlice';
 import { addToast } from '../../redux/slices/uiSlice';
 import { formatCurrency } from '../../utils';
+import { speakText } from '../../utils/speak';
 import useAudioRecorder from '../../hooks/useAudioRecorder';
 
 const VoiceOrderPage = () => {
@@ -40,8 +48,13 @@ const VoiceOrderPage = () => {
   const sessionId  = useSelector(selectSessionId);
   const aiResponse = useSelector(selectAiResponse);
   const conversationLog = useSelector(selectConversationLog);
+  const createdOrder = useSelector(selectCreatedOrder);
   const isLoading  = useSelector(selectVoiceLoading);
   const error      = useSelector(selectVoiceError);
+  const selectedLanguage = useSelector(selectSelectedLanguage);
+
+  // Draft order: prefer Redux createdOrder (set by slice), fallback to aiResponse.draft_order
+  const draftOrder = createdOrder || aiResponse?.draft_order;
 
   const recorder = useAudioRecorder();
   const [textReply, setTextReply] = useState('');
@@ -61,6 +74,14 @@ const VoiceOrderPage = () => {
       }
     };
   }, [sessionId, dispatch]);
+
+  // Speak the AI's reply out loud whenever a new response arrives
+  useEffect(() => {
+    if (aiResponse) {
+      const text = selectedLanguage === 'english' ? aiResponse.message_en : aiResponse.message_local;
+      speakText(text, selectedLanguage);
+    }
+  }, [aiResponse, selectedLanguage]);
 
   const handleStopAndProcess = async () => {
     recorder.stopRecording();
@@ -96,27 +117,12 @@ const VoiceOrderPage = () => {
   };
 
   const handleConfirmOrder = async () => {
-    if (!aiResponse?.draft_order) return;
-
-    // Send confirmation reply to MS2 conversation
-    const result = await dispatch(processReply({ sessionId, reply: 'yes' }));
-    
-    if (processReply.fulfilled.match(result)) {
-      // Check if the response contains a completed order
-      if (result.payload?.status === 'completed' && result.payload?.order) {
-        dispatch(setStep(VOICE_STEPS.SUBMITTED));
-        dispatch(addToast({ message: 'Order created successfully!', type: 'success' }));
-        // Clean up session after successful order
-        if (sessionId) {
-          dispatch(terminateSession(sessionId));
-        }
-      } else {
-        // Handle case where confirmation didn't complete the order
-        dispatch(addToast({ message: 'Confirmation failed. Please try again.', type: 'error' }));
-      }
-    } else {
-      dispatch(addToast({ message: 'Failed to send confirmation', type: 'error' }));
-    }
+    if (!sessionId) return;
+    // Send "yes" to the session — the server-side shortcut in agent_node
+    // detects awaiting_confirmation + "yes" and calls confirmOrder directly
+    // without an extra LLM round-trip. Redux slice transitions to SUBMITTED
+    // automatically when status === 'completed'.
+    await dispatch(processReply({ sessionId, reply: 'yes' }));
   };
 
   const handleReset = () => {
@@ -132,12 +138,15 @@ const VoiceOrderPage = () => {
     <DashboardLayout title="Voice Order">
       <div className="max-w-2xl mx-auto space-y-4 sm:space-y-6">
         {/* Header */}
-        <div>
-          <div className="flex items-center gap-2 mb-0.5">
-            <Mic size={20} className="text-primary-500" />
-            <h1 className="page-title">Voice Order</h1>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <div className="flex items-center gap-2 mb-0.5">
+              <Mic size={20} className="text-primary-500" />
+              <h1 className="page-title">Voice Order</h1>
+            </div>
+            <p className="page-subtitle">Record your order — AI will extract the details and ask clarifying questions if needed.</p>
           </div>
-          <p className="page-subtitle">Record your order in Hindi or Hinglish — AI will extract the details and ask clarifying questions if needed.</p>
+          <LanguageSelect />
         </div>
 
         {/* ── IDLE / RECORDING / RECORDED ─────────────────────────────── */}
@@ -182,7 +191,7 @@ const VoiceOrderPage = () => {
                       </div>
                     ) : (
                       <p className="text-sm text-surface-500 text-center">
-                        Tap the mic to start · Speak in Hindi or Hinglish
+                        Tap the mic to start · Speak in your chosen language
                       </p>
                     )}
                     {recorder.error && (
@@ -239,26 +248,17 @@ const VoiceOrderPage = () => {
                 </div>
               </Card.Header>
               <Card.Body className="space-y-4">
-                {/* AI Text Message */}
+                {/* AI Text Message — shown in the salesman's chosen language */}
                 <div className="p-4 bg-primary-50 rounded-xl border border-primary-100">
-                  <p className="text-sm text-surface-800">{aiResponse.message}</p>
+                  <p className="text-sm text-surface-800">
+                    {selectedLanguage === 'english' ? aiResponse.message_en : aiResponse.message_local}
+                  </p>
                 </div>
 
-                {/* TTS Audio Playback */}
-                {aiResponse.audio_base64 && (
-                  <div className="flex items-center gap-3">
-                    <VoicePlayer
-                      audioUrl={`data:audio/mp3;base64,${aiResponse.audio_base64}`}
-                      duration="AI Response"
-                    />
-                  </div>
-                )}
-
-                {/* Clarification Field Indicator */}
-                {aiResponse.clarification_field && (
+                {aiResponse.status && (
                   <div className="flex items-center gap-2 text-xs text-surface-400">
                     <span className="px-2 py-1 bg-surface-100 rounded-full">
-                      Clarifying: {aiResponse.clarification_field}
+                      Status: {aiResponse.status}
                     </span>
                   </div>
                 )}
@@ -366,7 +366,7 @@ const VoiceOrderPage = () => {
         )}
 
         {/* ── PREVIEW (Final Order) ──────────────────────────────────────── */}
-        {step === VOICE_STEPS.PREVIEW && aiResponse?.draft_order && (
+        {step === VOICE_STEPS.PREVIEW && (aiResponse?.draft_order || createdOrder) && (
           <div className="space-y-4">
             <Card>
               <Card.Header>
@@ -375,35 +375,35 @@ const VoiceOrderPage = () => {
               <Card.Body className="space-y-4">
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-surface-500">Shop:</span>
-                  <span className="font-semibold text-surface-800">{aiResponse.draft_order.shopName || 'Unknown'}</span>
+                  <span className="font-semibold text-surface-800">{(aiResponse?.draft_order || createdOrder)?.shopName || 'Unknown'}</span>
                 </div>
+                {(aiResponse?.message_en || aiResponse?.message_local) && (
+                  <div className="p-3 bg-primary-50 rounded-lg border border-primary-100">
+                    <p className="text-sm text-surface-800">
+                      {selectedLanguage === 'english' ? aiResponse.message_en : aiResponse.message_local}
+                    </p>
+                  </div>
+                )}
               </Card.Body>
             </Card>
 
             <Card>
               <Card.Header>
                 <h2 className="text-base font-semibold">Order Items</h2>
-                <span className="text-sm text-surface-400">{aiResponse.draft_order.items?.length || 0} items</span>
+                <span className="text-sm text-surface-400">{(aiResponse?.draft_order?.items || createdOrder?.items)?.length || 0} items</span>
               </Card.Header>
               <div className="divide-y divide-surface-100">
-                {aiResponse.draft_order.items?.map((item, i) => (
+                {(aiResponse?.draft_order?.items || createdOrder?.items)?.map((item, i) => (
                   <div key={i} className="px-4 sm:px-6 py-3 sm:py-3.5 flex justify-between items-center">
                     <div>
                       <p className="text-sm font-medium text-surface-800">{item.productName}</p>
-                      <p className="text-xs text-surface-400">{formatCurrency(item.unitPrice)} each</p>
+                      <p className="text-xs text-surface-400">{item.variant_description}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-xs text-surface-400">×{item.quantity}</p>
-                      <p className="text-sm font-semibold">{formatCurrency(item.subtotal)}</p>
                     </div>
                   </div>
                 ))}
-              </div>
-              <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-surface-200 flex justify-between">
-                <span className="font-semibold text-surface-700">Estimated Total</span>
-                <span className="font-bold text-base sm:text-lg text-surface-900">
-                  {formatCurrency(aiResponse.draft_order.items?.reduce((sum, i) => sum + parseFloat(i.subtotal || 0), 0) || 0)}
-                </span>
               </div>
             </Card>
 

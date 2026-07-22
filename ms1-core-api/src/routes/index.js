@@ -60,4 +60,8 @@ router.use('/dashboard', require('../modules/dashboard/dashboard.routes'));
 // Voice Sessions Module — Proxy to MS2 conversation API
 router.use('/voice-sessions', require('../modules/voiceSessions/voiceSessions.routes'));
 
+// Internal Module — MS2 (AI Service) to MS1 internal APIs only
+// Protected by X-Service-Key header. Never exposed to frontend.
+router.use('/internal', require('./internal.routes'));
+
 module.exports = router;

@@ -1,20 +1,32 @@
 """
-conversation.py — The 4 conversation API endpoints.
+conversation.py — Voice order conversation API endpoints.
 
 Endpoints:
-    POST   /api/v1/conversation/start          — Start a new session
+    POST   /api/v1/conversation/start          — Create session
     POST   /api/v1/conversation/audio          — Send audio, get AI response
     POST   /api/v1/conversation/reply          — Send text reply (clarification/confirmation)
-    DELETE /api/v1/conversation/{session_id}   — End session early
+    DELETE /api/v1/conversation/{session_id}   — End session
 
-Flow per turn:
-    1. Load state from session store (or create fresh state for first turn).
-    2. Pre-process the input (update transcript, handle clarification reply).
-    3. Run the LangGraph with the updated state (ainvoke).
-    4. Save the new state back to session store.
-    5. Generate TTS audio from tts_message.
-    6. Return JSON response to React.
-    7. If response_status is "completed" or "cancelled": delete session.
+Architecture per turn (audio and reply):
+    1. Validate session exists in store
+    2. Load session memory (selected_shop, draft_order, conversation history)
+    3. Load business context cache (shops, products)
+    4. Build ephemeral VoiceOrderState for this turn
+    5. Run LangGraph (agent_node → tool selection → tool execution)
+    6. Update session memory in store (done inside agent_node)
+    7. Delete session if terminal status (completed / cancelled / failed)
+    8. Return JSON response to MS1 → Frontend
+
+Response shape (stable for frontend compatibility):
+    {
+        "sessionId":    "...",
+        "status":       "clarifying | confirming | completed | cancelled | failed",
+        "message_en":   "...",
+        "message_local": "...",
+        "language":     "hinglish",
+        "draft_order":  {...} or null,
+        "order":        {...} or null
+    }
 """
 
 import os
@@ -23,269 +35,247 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
 
 from app.graph.state import VoiceOrderState, initial_state
-from app.prompts.clarification import general_clarification_message
-from app.services.tts_service import TextToSpeechService
+from app.middleware.service_auth import verify_service_key
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/conversation", tags=["Conversation"])
 
-tts = TextToSpeechService()
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _get_session_store(request: Request):
+def _store(request: Request):
     return request.app.state.session_store
 
 
-def _get_speech_service(request: Request):
+def _speech(request: Request):
     return request.app.state.speech_service
 
 
-def _get_graph(request: Request):
+def _graph(request: Request):
     return request.app.state.graph
 
 
-def _build_response(state: VoiceOrderState) -> dict:
-    """
-    Build the standard JSON response from the final graph state.
-    React uses response_status to decide next action.
-    """
-    language     = state.get("language", "hi")
-    tts_text     = state.get("tts_message", "")
-    audio_b64    = tts.synthesize(tts_text, language) if tts_text else ""
-
+def _build_response(result_state: VoiceOrderState, session_id: str) -> dict:
+    """Build the standard JSON response from final graph state."""
     return {
-        "sessionId":     state.get("session_id"),
-        "status":        state.get("response_status", "clarifying"),
-        "message":       tts_text,
-        "audio_base64":  audio_b64,
-        "clarification_field": state.get("clarification_field"),
-        "draft_order":   state.get("draft_order"),
-        "order":         state.get("api_response"),
+        "sessionId":     session_id,
+        "status":        result_state.get("response_status", "clarifying"),
+        "message_en":    result_state.get("message_en") or "",
+        "message_local": result_state.get("message_local") or "",
+        "language":      result_state.get("reply_language", "hinglish"),
+        "draft_order":   result_state.get("draft_order"),
+        "order":         result_state.get("api_response"),
     }
 
 
-def _pre_process_reply(state: dict, reply_text: str) -> dict:
+def _build_state_from_session(
+    session_id: str,
+    salesman_id: str,
+    auth_token: str,
+    transcript: str,
+    reply_language: str,
+    session_store,
+) -> VoiceOrderState:
     """
-    Update the state before re-running the graph on a user reply turn.
-
-    Based on clarification_field, we update the relevant state fields
-    so the nodes know what changed. Then we re-run the graph from START.
+    Load session data from store and build ephemeral VoiceOrderState for one turn.
     """
-    field = state.get("clarification_field", "entity")
-    state["transcript"] = reply_text
-    state["turn"]       = state.get("turn", 1) + 1
+    session_data = session_store.get(session_id)
 
-    # Add this reply to conversation history
-    history = state.get("conversation_history", [])
-    history.append({"role": "user", "content": reply_text})
-    state["conversation_history"] = history
+    shops    = []
+    products = []
+    draft    = None
+    history  = []
 
-    if field == "shop":
-        # User gave the shop name again — clear old result and retry
-        state["extracted_shop_name"] = None
-        state["shop_not_found"]      = False
-        # Don't clear retry_count — we need to track it for "create new shop" logic
-        # Don't clear extracted_products - extract_entity_node will preserve them
-        logger.info(f"_pre_process_reply: shop clarification - preserving extracted_products: {state.get('extracted_products')}")
-    
-    elif field == "shop_confirm":
-        # User is answering yes/no to shop confirmation
-        # Don't re-extract shop name from "nahi" - let shop_lookup_node handle the response
-        state["extracted_shop_name"] = None  # Clear to prevent re-matching
-        logger.info(f"_pre_process_reply: shop_confirm - clearing extracted_shop_name to prevent re-matching")
+    if session_data:
+        cache    = session_data.get("business_cache", {})
+        memory   = session_data.get("memory", {})
+        shops    = cache.get("shops", [])
+        products = cache.get("products", [])
+        draft    = memory.get("draft_order")
+        # Convert recent_messages to simple history format for LLM
+        history  = [
+            {"role": m["role"], "content": m["content"]}
+            for m in memory.get("recent_messages", [])
+        ]
 
-    elif field == "product" or field == "product_variant" or field == "product_quantity":
-        # User corrected a product — re-extract from the full reply
-        state["extracted_products"]  = []
-        state["matched_products"]    = []
-        state["clarification_required"] = False
-
-    elif field == "entity":
-        # Completely re-extract
-        state["extracted_shop_name"] = None
-        state["extracted_products"]  = []
-        state["shop_not_found"]      = False
-        state["matched_products"]    = []
-
-    elif field == "confirmation":
-        # User is answering yes/no — keep draft, just update transcript
-        pass  # confirmation_node will process state["transcript"]
-
-    # Clear clarification state — will be set again by nodes if still needed
-    state["clarification_required"]  = False
-    state["clarification_question"]  = None
-    # Don't clear clarification_field for shop or shop_confirm - nodes need it
-    if field not in ("shop", "shop_confirm"):
-        state["clarification_field"]     = None
-    state["tts_message"]             = None
-
-    return state
+    return initial_state(
+        session_id=session_id,
+        salesman_id=salesman_id,
+        transcript=transcript,
+        reply_language=reply_language,
+        auth_token=auth_token,
+        shops_cache=shops,
+        products_cache=products,
+        conversation_history=history,
+        draft_order=draft,
+        session_store=session_store,
+    )
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
-@router.post("/start", summary="Start a new voice order conversation")
-async def start_conversation(request: Request):
+@router.post("/start", summary="Start a new voice order conversation",
+             dependencies=[Depends(verify_service_key)])
+async def start_conversation(
+    request: Request,
+    salesman_id:    str = Form(..., description="Salesman UUID from MS1 JWT"),
+    reply_language: str = Form("hinglish", description="Preferred language"),
+):
     """
-    Create a new session and return its session_id.
-    React must store this session_id and send it with every subsequent request.
+    Create a new session and return the session_id.
+    MS1 stores this and sends it with every subsequent request.
 
     Returns:
-        { sessionId: str, message: str }
+        { sessionId, message }
     """
     session_id    = str(uuid.uuid4())
-    session_store = _get_session_store(request)
+    session_store = _store(request)
 
-    # Store a placeholder so the session exists before the first audio arrives
-    session_store.set(session_id, {"session_id": session_id})
+    session_store.create(
+        session_id=session_id,
+        salesman_id=salesman_id,
+        language=reply_language,
+    )
 
-    logger.info(f"Conversation started | session={session_id[:8]}...")
+    logger.info(f"Session started | id={session_id[:8]} | salesman={salesman_id[:8]}")
     return {
         "sessionId": session_id,
         "message":   "Session started. Please send your voice order.",
+        "message_local": _greeting(reply_language),
     }
 
 
-@router.post("/audio", summary="Send audio — transcribe and process through AI pipeline")
+@router.post("/audio", summary="Send voice audio — transcribe and process",
+             dependencies=[Depends(verify_service_key)])
 async def send_audio(
-    request:    Request,
-    session_id: str = Form(..., description="Session ID from /conversation/start"),
-    audio:      UploadFile = File(..., description="Audio file (wav, mp3, webm, m4a)"),
-    auth_token: str = Form(..., description="Salesman's Bearer token from MS1 login"),
-    salesman_id: str = Form(..., description="Salesman's UUID from MS1"),
+    request:        Request,
+    session_id:     str       = Form(...),
+    audio:          UploadFile = File(..., description="Audio file (webm, wav, mp3, m4a)"),
+    auth_token:     str       = Form(..., description="Salesman JWT from MS1 login"),
+    salesman_id:    str       = Form(..., description="Salesman UUID"),
+    reply_language: str       = Form("hinglish"),
 ):
     """
-    Receive audio, transcribe with Whisper, run LangGraph pipeline.
-
-    Multi-turn: If session already has state (e.g., answering a clarification
-    with a new audio), the graph continues from where it left off.
-
-    Returns standard conversation response with TTS audio.
+    Receive audio → transcribe with Whisper → run one LangGraph turn → respond.
     """
-    session_store  = _get_session_store(request)
-    speech_service = _get_speech_service(request)
-    graph          = _get_graph(request)
+    session_store  = _store(request)
+    speech_service = _speech(request)
+    graph          = _graph(request)
 
-    # ── 1. Validate session ───────────────────────────────────────
-    existing_state = session_store.get(session_id)
-    if existing_state is None:
+    # ── 1. Validate session ───────────────────────────────────────────────────
+    if not session_store.exists(session_id):
         raise HTTPException(status_code=404, detail="Session not found or expired.")
 
-    # ── 2. Save audio to temp file ────────────────────────────────
+    # ── 2. Transcribe audio ───────────────────────────────────────────────────
     temp_path = f"temp/{session_id}_{audio.filename}"
     os.makedirs("temp", exist_ok=True)
     try:
         content = await audio.read()
         with open(temp_path, "wb") as f:
             f.write(content)
-
-        # ── 3. Transcribe with Whisper ─────────────────────────────
-        transcript, language = speech_service.transcribe(temp_path)
-        logger.info(f"Transcription | session={session_id[:8]} | lang={language} | '{transcript[:60]}'")
-
+        transcript, detected_lang = speech_service.transcribe(temp_path)
+        logger.info(f"Transcribed | session={session_id[:8]} | lang={detected_lang} | '{transcript[:60]}'")
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
 
+    # ── 3. Handle empty/garbled transcript ───────────────────────────────────
     if not transcript.strip():
-        lang = existing_state.get("language", "hi")
-        msg  = general_clarification_message(lang)
         return {
-            "sessionId":    session_id,
-            "status":       "clarifying",
-            "message":      msg,
-            "audio_base64": tts.synthesize(msg, lang),
-            "clarification_field": "entity",
-            "draft_order":  None,
-            "order":        None,
+            "sessionId":     session_id,
+            "status":        "clarifying",
+            "message_en":    "Sorry, I couldn't hear that clearly. Please try again.",
+            "message_local": "Maaf kijiye, sunayi nahi diya. Dobara boliye.",
+            "language":      reply_language,
+            "draft_order":   None,
+            "order":         None,
         }
 
-    # ── 4. Build or update state ───────────────────────────────────
-    logger.info(f"Existing state check - shop_id={existing_state.get('shop_id')}, extracted_shop_name={existing_state.get('extracted_shop_name')}, extracted_products={existing_state.get('extracted_products')}, clarification_field={existing_state.get('clarification_field')}")
-    
-    if existing_state.get("shop_id") or existing_state.get("extracted_shop_name") or existing_state.get("clarification_field"):
-        # Continuing session — pre-process as a reply
-        state = _pre_process_reply(dict(existing_state), transcript)
-        state["language"] = language  # Update language from new audio
-        logger.info(f"After pre-process - extracted_products={state.get('extracted_products')}")
-    else:
-        # First audio turn — create fresh state
-        state = initial_state(
-            session_id=session_id,
-            transcript=transcript,
-            salesman_id=salesman_id,
-            auth_token=auth_token,
-        )
-        state["language"] = language
+    # ── 4. Build state and run graph ──────────────────────────────────────────
+    state = _build_state_from_session(
+        session_id=session_id,
+        salesman_id=salesman_id,
+        auth_token=auth_token,
+        transcript=transcript,
+        reply_language=reply_language,
+        session_store=session_store,
+    )
 
-    # ── 5. Run LangGraph ───────────────────────────────────────────
     result_state: VoiceOrderState = await graph.ainvoke(state)
 
-    # ── 6. Save state & respond ────────────────────────────────────
-    response_status = result_state.get("response_status", "clarifying")
-
-    if response_status in ("completed", "cancelled", "failed"):
+    # ── 5. Delete session if terminal ─────────────────────────────────────────
+    status = result_state.get("response_status", "clarifying")
+    if status in ("completed", "cancelled", "failed"):
         session_store.delete(session_id)
-        logger.info(f"Session {session_id[:8]}... ended with status: {response_status}")
-    else:
-        session_store.set(session_id, dict(result_state))
+        logger.info(f"Session ended | id={session_id[:8]} | status={status}")
 
-    return _build_response(result_state)
+    return _build_response(result_state, session_id)
 
 
-@router.post("/reply", summary="Send text reply (for clarification or confirmation)")
+@router.post("/reply", summary="Send text reply for clarification or confirmation",
+             dependencies=[Depends(verify_service_key)])
 async def send_reply(
-    request:    Request,
-    session_id: str = Form(..., description="Session ID"),
-    reply:      str = Form(..., description="The salesman's text reply"),
-    auth_token: str = Form(..., description="Salesman's Bearer token"),
+    request:        Request,
+    session_id:     str = Form(...),
+    reply:          str = Form(..., description="Salesman's text reply"),
+    auth_token:     str = Form(...),
+    salesman_id:    str = Form(...),
+    reply_language: str = Form("hinglish"),
 ):
     """
-    Send a text reply to a clarification question or order summary.
-    Used when the salesman types instead of speaking, or when the frontend
-    captures voice → text locally and sends the text.
-
-    Typical usage:
-        - Answering a shop clarification: "Sharma General Store"
-        - Confirming an order: "Haan" / "Yes"
-        - Cancelling: "Nahi" / "No"
+    Send a text reply (clarification answer, confirmation yes/no, shop choice).
+    Used when frontend captures voice-to-text or salesman types a response.
     """
-    session_store = _get_session_store(request)
-    graph         = _get_graph(request)
+    session_store = _store(request)
+    graph         = _graph(request)
 
-    existing_state = session_store.get(session_id)
-    if existing_state is None:
+    # ── 1. Validate session ───────────────────────────────────────────────────
+    if not session_store.exists(session_id):
         raise HTTPException(status_code=404, detail="Session not found or expired.")
 
-    # ── Pre-process the reply based on current clarification_field ─
-    state = _pre_process_reply(dict(existing_state), reply)
-    state["auth_token"] = auth_token   # Refresh token in case of re-use
+    # ── 2. Build state and run graph ──────────────────────────────────────────
+    state = _build_state_from_session(
+        session_id=session_id,
+        salesman_id=salesman_id,
+        auth_token=auth_token,
+        transcript=reply,
+        reply_language=reply_language,
+        session_store=session_store,
+    )
 
-    # ── Run LangGraph ──────────────────────────────────────────────
     result_state: VoiceOrderState = await graph.ainvoke(state)
 
-    # ── Save or delete session ─────────────────────────────────────
-    response_status = result_state.get("response_status", "clarifying")
-
-    if response_status in ("completed", "cancelled", "failed"):
+    # ── 3. Delete session if terminal ─────────────────────────────────────────
+    status = result_state.get("response_status", "clarifying")
+    if status in ("completed", "cancelled", "failed"):
         session_store.delete(session_id)
-    else:
-        session_store.set(session_id, dict(result_state))
+        logger.info(f"Session ended | id={session_id[:8]} | status={status}")
 
-    return _build_response(result_state)
+    return _build_response(result_state, session_id)
 
 
-@router.delete("/{session_id}", summary="End a conversation session early")
+@router.delete("/{session_id}", summary="End a conversation session early",
+               dependencies=[Depends(verify_service_key)])
 async def end_conversation(session_id: str, request: Request):
     """
-    Explicitly delete a session (e.g., user closes the order window).
-    React should call this when the user navigates away.
+    Explicitly delete a session (user closes voice order window).
+    MS1 calls this when the frontend navigates away.
     """
-    session_store = _get_session_store(request)
-    session_store.delete(session_id)
-    logger.info(f"Session {session_id[:8]}... deleted by client request.")
+    _store(request).delete(session_id)
+    logger.info(f"Session explicitly ended | id={session_id[:8]}")
     return {"message": "Session ended.", "sessionId": session_id}
+
+
+# ── Private helpers ────────────────────────────────────────────────────────────
+
+def _greeting(language: str) -> str:
+    greetings = {
+        "hinglish": "Boliye, kaunsi dukaan ke liye order dena hai?",
+        "english":  "Please tell me the shop name and your order.",
+        "hindi":    "बताइए, किस दुकान के लिए ऑर्डर देना है?",
+        "bengali":  "বলুন, কোন দোকানের জন্য অর্ডার দিতে চান?",
+        "marathi":  "सांगा, कोणत्या दुकानासाठी ऑर्डर द्यायचा आहे?",
+    }
+    return greetings.get(language.lower(), greetings["hinglish"])

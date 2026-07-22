@@ -1,25 +1,16 @@
 """
-VoiceOrderState — LangGraph conversation state.
+graph/state.py — Ephemeral LangGraph conversation state.
 
-This TypedDict is the single source of truth for the entire
-voice order conversation. It flows through every node in the graph.
+This TypedDict is used ONLY during one LangGraph execution turn.
+Persistent data (conversation history, selected shop, draft order) lives
+in the SessionStore between turns, not here.
 
-Design principles:
-- Each node reads what it needs, writes only what it owns.
-- Optional fields use None as "not yet set" sentinel.
-- Nodes NEVER mutate fields owned by other nodes.
-- All dict fields carry typed data (aligned with schemas).
-
-Node ownership:
-    extract_order_node  → extracted_shop_name, extracted_products, language
-    shop_lookup_node    → shop_id, shop_data, shop_not_found
-    retry_shop_node     → retry_count, shop_not_found
-    collect_shop_info   → pending_shop_info, is_new_shop
-    product_lookup_node → matched_products
-    clarification_node  → clarification_question, clarification_field
-    draft_order_node    → draft_order
-    confirmation_node   → confirmation_status
-    create_order_node   → api_response, tts_message, response_status
+What this state carries:
+  - Session identifiers (session_id, salesman_id, auth_token)
+  - Current input (transcript, reply_language)
+  - Business context cache (loaded from session store, passed through graph)
+  - Output fields (message_en, message_local, response_status, draft_order)
+  - Internal reference to session_store (for agent_node to update memory)
 """
 
 from typing import TypedDict, Optional, Any
@@ -27,113 +18,70 @@ from typing import TypedDict, Optional, Any
 
 class VoiceOrderState(TypedDict):
 
-    # ── Session ────────────────────────────────────────────────
-    session_id: str
-    salesman_id: str
-    auth_token: Optional[str]           # Bearer token forwarded to MS1
+    # ── Session Identifiers ─────────────────────────────────────────────────
+    session_id:   str
+    salesman_id:  str
+    auth_token:   Optional[str]          # Salesman's JWT forwarded from MS1
 
-    # ── Input ──────────────────────────────────────────────────
-    transcript: str                     # Current turn's voice → text
-    language: str                       # Detected: "en" | "hi"
-    turn: int                           # Conversation turn count (starts at 1)
+    # ── Current Input ───────────────────────────────────────────────────────
+    transcript:     str                  # Voice transcript or text reply this turn
+    reply_language: str                  # 'hinglish' | 'english' | 'hindi' | 'bengali' | 'marathi'
 
-    # ── Conversation History ───────────────────────────────────
+    # ── Business Context Cache ──────────────────────────────────────────────
+    # Loaded from session store at start of turn. Passed through graph.
+    # Refreshed from MS1 /internal/context if empty.
+    shops_cache:    list[dict[str, Any]]
+    products_cache: list[dict[str, Any]]
+
+    # ── Conversation History (ephemeral — loaded from session store) ────────
     conversation_history: list[dict[str, str]]   # [{ role, content }]
 
-    # ── Extraction (LLM output) ────────────────────────────────
-    extracted_shop_name: Optional[str]
-    extracted_products: list[dict[str, Any]]     # list[ExtractedProduct dicts]
+    # ── Output ──────────────────────────────────────────────────────────────
+    message_en:      Optional[str]       # AI response in English
+    message_local:   Optional[str]       # AI response in reply_language
+    response_status: str                 # 'clarifying' | 'confirming' | 'completed' | 'cancelled' | 'failed'
+    last_tool:       Optional[str]       # Tool name selected this turn
+    draft_order:     Optional[dict[str, Any]]     # Draft order for preview
+    api_response:    Optional[dict[str, Any]]     # MS1 response after order creation
 
-    # ── Shop Resolution ────────────────────────────────────────
-    shop_id: Optional[str]                       # UUID — set after shop found/created
-    shop_data: Optional[dict[str, Any]]          # Full ShopResponse dict
-    shop_not_found: bool                         # True after MS1 search returns empty
-    retry_count: int                             # Number of shop search retries
-    is_new_shop: Optional[bool]                  # True if user confirms new shop
-    pending_shop_info: dict[str, Any]            # PendingShopInfo dict (collected turn by turn)
-    proposed_shop: Optional[dict[str, Any]]      # Shop proposed for "Did you mean?" confirmation
-    shop_match_score: Optional[int]              # Confidence score for shop match
-
-    # ── Product Resolution ─────────────────────────────────────
-    matched_products: list[dict[str, Any]]       # list[MatchedProduct dicts]
-    unresolved_products: list[str]               # List of product names already asked about
-
-    # ── Clarification ──────────────────────────────────────────
-    clarification_required: bool
-    clarification_question: Optional[str]        # Question shown/spoken to user
-    clarification_field: Optional[str]           # "shop" | "product" | "quantity"
-
-    # ── Draft Order ────────────────────────────────────────────
-    draft_order: Optional[dict[str, Any]]        # DraftOrder dict
-
-    # ── Confirmation ───────────────────────────────────────────
-    confirmation_status: Optional[str]           # "pending" | "confirmed" | "rejected"
-
-    # ── MS1 Response ───────────────────────────────────────────
-    api_response: Optional[dict[str, Any]]       # MS1 response after order creation
-
-    # ── Output ─────────────────────────────────────────────────
-    tts_message: Optional[str]                   # Text that will be converted to audio
-    response_status: str                         # ConversationStatus constant
+    # ── Internal Reference ──────────────────────────────────────────────────
+    # Reference to the SessionStore instance — passed by conversation.py
+    # so agent_node can update session memory without a global
+    _session_store: Optional[Any]
 
 
 def initial_state(
     session_id: str,
-    transcript: str,
     salesman_id: str,
+    transcript: str,
+    reply_language: str = "hinglish",
     auth_token: Optional[str] = None,
+    shops_cache: Optional[list] = None,
+    products_cache: Optional[list] = None,
+    conversation_history: Optional[list] = None,
+    draft_order: Optional[dict] = None,
+    session_store: Optional[Any] = None,
 ) -> VoiceOrderState:
     """
-    Factory function — creates a clean initial state for a new conversation.
-    Use this whenever a session_id is not found in the session store.
+    Build a fresh VoiceOrderState for one LangGraph execution turn.
+
+    Called by conversation.py endpoints before each graph.ainvoke().
+    The session store provides the persistent data; this state is ephemeral.
     """
     return VoiceOrderState(
-        # Session
         session_id=session_id,
         salesman_id=salesman_id,
         auth_token=auth_token,
-
-        # Input
         transcript=transcript,
-        language="hi",              # Default — overwritten by Whisper detection
-        turn=1,
-
-        # Conversation
-        conversation_history=[],
-
-        # Extraction
-        extracted_shop_name=None,
-        extracted_products=[],
-
-        # Shop
-        shop_id=None,
-        shop_data=None,
-        shop_not_found=False,
-        retry_count=0,
-        is_new_shop=None,
-        pending_shop_info={},
-        proposed_shop=None,
-        shop_match_score=None,
-
-        # Products
-        matched_products=[],
-        unresolved_products=[],
-
-        # Clarification
-        clarification_required=False,
-        clarification_question=None,
-        clarification_field=None,
-
-        # Draft
-        draft_order=None,
-
-        # Confirmation
-        confirmation_status=None,
-
-        # MS1
-        api_response=None,
-
-        # Output
-        tts_message=None,
+        reply_language=reply_language,
+        shops_cache=shops_cache or [],
+        products_cache=products_cache or [],
+        conversation_history=conversation_history or [],
+        message_en=None,
+        message_local=None,
         response_status="clarifying",
+        last_tool=None,
+        draft_order=draft_order,
+        api_response=None,
+        _session_store=session_store,
     )
