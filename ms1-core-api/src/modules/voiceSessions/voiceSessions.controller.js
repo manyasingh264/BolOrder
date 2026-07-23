@@ -12,14 +12,12 @@ const sendResponse = require('../../utils/sendResponse');
 const AppError = require('../../utils/AppError');
 
 // ─── Multer Config for Audio Upload ─────────────────────────────────────────────
-// Store uploaded audio files temporarily in uploads/audio
 const upload = multer({
   dest: 'uploads/audio',
   limits: {
     fileSize: 25 * 1024 * 1024, // 25MB max
   },
   fileFilter: (req, file, cb) => {
-    // Accept common audio formats
     const allowedMimes = [
       'audio/webm',
       'audio/ogg',
@@ -40,7 +38,14 @@ const upload = multer({
 // POST /api/voice-sessions/start
 const startSession = async (req, res, next) => {
   try {
-    const result = await voiceSessionService.startConversation();
+    const language   = req.body?.language || 'hinglish';
+    const salesmanId = req.user?.userId;
+
+    if (!salesmanId) {
+      throw new AppError('Authentication required.', 401);
+    }
+
+    const result = await voiceSessionService.startConversation(salesmanId, language);
     return sendResponse(res, 200, true, 'Voice session started', result);
   } catch (error) { next(error); }
 };
@@ -49,6 +54,7 @@ const startSession = async (req, res, next) => {
 const sendAudio = async (req, res, next) => {
   const audioFile = req.file;
   const { sessionId } = req.params;
+  const language = req.body?.language || 'hinglish';
 
   try {
     if (!audioFile) {
@@ -67,7 +73,8 @@ const sendAudio = async (req, res, next) => {
       sessionId,
       audioFile.path,
       authToken,
-      salesmanId
+      salesmanId,
+      language
     );
 
     // Clean up temp audio file
@@ -89,21 +96,26 @@ const sendAudio = async (req, res, next) => {
 // POST /api/voice-sessions/:sessionId/reply
 const sendReply = async (req, res, next) => {
   const { sessionId } = req.params;
-  const { reply } = req.body;
+  const { reply, language } = req.body;
 
   try {
     if (!reply || typeof reply !== 'string') {
       throw new AppError('Reply text is required.', 400);
     }
 
-    // Inject auth token from authenticated request
     const authToken = req.headers.authorization?.replace('Bearer ', '');
 
     if (!authToken) {
       throw new AppError('Authentication required. Please log in.', 401);
     }
 
-    const result = await voiceSessionService.sendReply(sessionId, reply, authToken);
+    const result = await voiceSessionService.sendReply(
+      sessionId,
+      reply,
+      authToken,
+      req.user?.userId,
+      language || 'hinglish'
+    );
     return sendResponse(res, 200, true, 'Reply processed successfully', result);
 
   } catch (error) { next(error); }

@@ -1,9 +1,9 @@
 // shops.service.js — business logic for customer shops.
 //
 // Role-based data access rules enforced here:
-//   ADMIN     → can see all shops, create, update, add aliases
+//   ADMIN      → can see all shops, create, update, add aliases
 //   SUPERVISOR → can see all shops, create, update, add aliases
-//   SALESMAN   → can ONLY see their own assigned shops (READ ONLY)
+//   SALESMAN   → READ ONLY, sees shops that have at least one order
 //
 // These rules are enforced by checking req.user.role (passed in as requestingUser).
 
@@ -12,12 +12,12 @@ const AppError = require('../../utils/AppError');
 const { ROLES } = require('../../constants');
 
 // ─── Get All Shops ────────────────────────────────────────────────────────────
-// SALESMAN sees only their shops; ADMIN/SUPERVISOR see all
+// ADMIN/SUPERVISOR see all shops.
+// SALESMAN sees only shops they have personally placed at least one order from.
 const getAllShops = async (requestingUser) => {
   if (requestingUser.role === ROLES.SALESMAN) {
-    return shopsRepository.findShopsBySalesmanId(requestingUser.userId);
+    return shopsRepository.findShopsOrderedBySalesman(requestingUser.userId);
   }
-
   return shopsRepository.findAllShops();
 };
 
@@ -29,14 +29,7 @@ const getShopById = async (id, requestingUser) => {
     throw new AppError('Shop not found', 404);
   }
 
-  // SALESMAN can only view shops assigned to them
-  if (
-    requestingUser.role === ROLES.SALESMAN &&
-    shop.salesmanId !== requestingUser.userId
-  ) {
-    throw new AppError('You do not have access to this shop', 403);
-  }
-
+  // All roles can view any shop
   return shop;
 };
 

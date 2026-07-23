@@ -1,38 +1,120 @@
-// pages/VoiceOrder/VoiceOrderPage.jsx — Conversational Voice Order
-// Multi-turn AI conversation with clarifications.
+// pages/VoiceOrder/VoiceOrderPage.jsx — Bilingual Voice Order (Hinglish / English)
+//
+// Language-aware:
+//   - UI labels shown in both Hinglish and English based on selected language
+//   - AI responses use message_local (Hinglish) or message_en (English)
+//   - STT uses hi-IN for Hinglish, en-IN for English
+//   - TTS speaks in the right language
+//
 // Steps: IDLE → RECORDING → RECORDED → PROCESSING → CONVERSATION → PREVIEW → SUBMITTED
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Mic, RefreshCw, CheckCircle2, Loader2, AlertCircle, Send, MessageSquare } from 'lucide-react';
+import {
+  Mic, MicOff, RefreshCw, CheckCircle2, Loader2,
+  AlertCircle, Send, ShoppingBag, Store, Sparkles,
+  Volume2, ChevronRight,
+} from 'lucide-react';
 
 import DashboardLayout from '../../components/Layout/DashboardLayout';
-import Card from '../../components/Card/Card';
 import Button from '../../components/Button/Button';
-import VoicePlayer from '../../components/VoicePlayer/VoicePlayer';
-import { StatusBadge } from '../../components/Badge/Badge';
+import LanguageSelect from '../../components/LanguageSelect/LanguageSelect';
 
 import {
-  startSession,
-  processAudio,
-  processReply,
-  terminateSession,
-  resetVoiceOrder,
-  setStep,
-  setAudioBlob,
-  addConversationMessage,
-  selectVoiceStep,
-  selectSessionId,
-  selectAiResponse,
-  selectConversationLog,
-  selectVoiceLoading,
-  selectVoiceError,
-  VOICE_STEPS,
+  startSession, processAudio, processReply, terminateSession,
+  resetVoiceOrder, setStep, addConversationMessage,
+  selectVoiceStep, selectSessionId, selectAiResponse,
+  selectConversationLog, selectCreatedOrder, selectVoiceLoading,
+  selectVoiceError, VOICE_STEPS,
 } from '../../redux/slices/voiceOrderSlice';
-import { createOrder } from '../../redux/slices/ordersSlice';
+import { selectSelectedLanguage, selectSelectedLanguageMeta } from '../../redux/slices/voiceSettingSlice';
 import { addToast } from '../../redux/slices/uiSlice';
-import { formatCurrency } from '../../utils';
+import { speakText, isTTSSupported } from '../../utils/speak';
 import useAudioRecorder from '../../hooks/useAudioRecorder';
+
+// ── Bilingual string map ──────────────────────────────────────────────────────
+const T = {
+  hinglish: {
+    title:           'Voice Order',
+    subtitle:        'Boliye apna order — AI samjhega aur confirm karega',
+    readyTitle:      'Bolne ke liye tayyar',
+    readyHint:       'Mic dabao aur order bolo',
+    recordingLabel:  'Recording…',
+    stopLabel:       'Rokne ke liye dabao',
+    retake:          'Dobara record karo',
+    sendAudio:       'AI ko bhejo',
+    processingTitle: 'AI process kar raha hai…',
+    processingHint:  'Dukaan, product aur matra nikal raha hai',
+    aiLabel:         'BolOrder AI',
+    yourReply:       'Aapka jawab',
+    typeReply:       'Yahan likhiye…',
+    orLabel:         'ya',
+    voiceReply:      'Voice mein jawab do',
+    cancelOrder:     'Roko aur naye se shuru karo',
+    orderSummary:    'Order Summary',
+    shop:            'Dukaan',
+    orderItems:      'Order Items',
+    confirmOrder:    'Order Confirm Karo',
+    cancel:          'Roko',
+    orderCreated:    'Order Ban Gaya! 🎉',
+    orderSuccess:    'Order safaltapurvak submit ho gaya',
+    newOrder:        'Naya Order Record Karo',
+    errorTitle:      'Kuch gadbad hui',
+    tryAgain:        'Dobara try karo',
+    items:           'items',
+    qty:             'matra',
+  },
+  english: {
+    title:           'Voice Order',
+    subtitle:        'Speak your order — AI will extract details and confirm',
+    readyTitle:      'Ready to Record',
+    readyHint:       'Tap the mic and speak your order',
+    recordingLabel:  'Recording…',
+    stopLabel:       'Tap to stop',
+    retake:          'Record Again',
+    sendAudio:       'Send to AI',
+    processingTitle: 'AI is processing…',
+    processingHint:  'Extracting shop, products and quantities',
+    aiLabel:         'BolOrder AI',
+    yourReply:       'Your Reply',
+    typeReply:       'Type your answer here…',
+    orLabel:         'or',
+    voiceReply:      'Voice reply',
+    cancelOrder:     'Cancel & Start Over',
+    orderSummary:    'Order Summary',
+    shop:            'Shop',
+    orderItems:      'Order Items',
+    confirmOrder:    'Confirm & Place Order',
+    cancel:          'Cancel',
+    orderCreated:    'Order Created! 🎉',
+    orderSuccess:    'Your order has been successfully submitted',
+    newOrder:        'Record Another Order',
+    errorTitle:      'Processing Failed',
+    tryAgain:        'Try Again',
+    items:           'items',
+    qty:             'qty',
+  },
+};
+
+// ── Animated Waveform bars (visual flair during recording) ───────────────────
+const WaveformBars = ({ active }) => (
+  <div className="flex items-center gap-0.5 h-8" aria-hidden>
+    {Array.from({ length: 12 }).map((_, i) => (
+      <span
+        key={i}
+        className={`w-1 rounded-full transition-all ${active ? 'bg-primary-400' : 'bg-surface-200'}`}
+        style={{
+          height: active
+            ? `${20 + Math.sin(i * 0.9) * 10}px`
+            : '6px',
+          animationDelay: `${i * 60}ms`,
+          animation: active ? 'wave 0.8s ease-in-out infinite alternate' : 'none',
+          animationDelay: active ? `${i * 55}ms` : '0ms',
+        }}
+      />
+    ))}
+  </div>
+);
 
 const VoiceOrderPage = () => {
   const dispatch   = useDispatch();
@@ -40,11 +122,29 @@ const VoiceOrderPage = () => {
   const sessionId  = useSelector(selectSessionId);
   const aiResponse = useSelector(selectAiResponse);
   const conversationLog = useSelector(selectConversationLog);
+  const createdOrder = useSelector(selectCreatedOrder);
   const isLoading  = useSelector(selectVoiceLoading);
   const error      = useSelector(selectVoiceError);
+  const lang       = useSelector(selectSelectedLanguage);
+  const langMeta   = useSelector(selectSelectedLanguageMeta);
+
+  const s = T[lang] || T.hinglish; // bilingual string lookup
+
+  // Draft order for preview
+  const draftOrder = createdOrder || aiResponse?.draft_order;
 
   const recorder = useAudioRecorder();
   const [textReply, setTextReply] = useState('');
+  const chatEndRef = useRef(null);
+
+  // Helper: get the right AI message for the chosen language
+  const aiMessage = (response) =>
+    lang === 'english' ? response?.message_en : (response?.message_local || response?.message_en);
+
+  // Auto-scroll chat to bottom
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [conversationLog]);
 
   // Start session when entering IDLE state
   useEffect(() => {
@@ -56,11 +156,17 @@ const VoiceOrderPage = () => {
   // Clean up session on unmount
   useEffect(() => {
     return () => {
-      if (sessionId) {
-        dispatch(terminateSession(sessionId));
-      }
+      if (sessionId) dispatch(terminateSession(sessionId));
     };
   }, [sessionId, dispatch]);
+
+  // Speak AI reply in the right language
+  useEffect(() => {
+    if (aiResponse) {
+      const text = aiMessage(aiResponse);
+      if (text) speakText(text, lang);
+    }
+  }, [aiResponse, lang]);
 
   const handleStopAndProcess = async () => {
     recorder.stopRecording();
@@ -70,373 +176,440 @@ const VoiceOrderPage = () => {
 
   const handleSendAudio = async () => {
     if (!sessionId || !recorder.audioBlob) return;
-
-    // Add user audio to conversation log
-    dispatch(addConversationMessage({
-      role: 'user',
-      message: '[Audio recording]',
-    }));
-
+    dispatch(addConversationMessage({ role: 'user', message: '[🎤 Voice message]' }));
     await dispatch(processAudio({ sessionId, audioBlob: recorder.audioBlob }));
   };
 
   const handleSendTextReply = async () => {
     if (!sessionId || !textReply.trim()) return;
-
     const reply = textReply.trim();
     setTextReply('');
-
-    // Add user text to conversation log
-    dispatch(addConversationMessage({
-      role: 'user',
-      message: reply,
-    }));
-
+    dispatch(addConversationMessage({ role: 'user', message: reply }));
     await dispatch(processReply({ sessionId, reply }));
   };
 
   const handleConfirmOrder = async () => {
-    if (!aiResponse?.draft_order) return;
-
-    // Send confirmation reply to MS2 conversation
-    const result = await dispatch(processReply({ sessionId, reply: 'yes' }));
-    
-    if (processReply.fulfilled.match(result)) {
-      // Check if the response contains a completed order
-      if (result.payload?.status === 'completed' && result.payload?.order) {
-        dispatch(setStep(VOICE_STEPS.SUBMITTED));
-        dispatch(addToast({ message: 'Order created successfully!', type: 'success' }));
-        // Clean up session after successful order
-        if (sessionId) {
-          dispatch(terminateSession(sessionId));
-        }
-      } else {
-        // Handle case where confirmation didn't complete the order
-        dispatch(addToast({ message: 'Confirmation failed. Please try again.', type: 'error' }));
-      }
-    } else {
-      dispatch(addToast({ message: 'Failed to send confirmation', type: 'error' }));
-    }
+    if (!sessionId) return;
+    await dispatch(processReply({ sessionId, reply: 'yes' }));
   };
 
   const handleReset = () => {
-    if (sessionId) {
-      dispatch(terminateSession(sessionId));
-    }
+    if (sessionId) dispatch(terminateSession(sessionId));
     recorder.resetRecording();
     setTextReply('');
     dispatch(resetVoiceOrder());
   };
 
   return (
-    <DashboardLayout title="Voice Order">
-      <div className="max-w-2xl mx-auto space-y-4 sm:space-y-6">
-        {/* Header */}
-        <div>
-          <div className="flex items-center gap-2 mb-0.5">
-            <Mic size={20} className="text-primary-500" />
-            <h1 className="page-title">Voice Order</h1>
+    <DashboardLayout title={s.title}>
+      {/* Keyframe animation injected inline */}
+      <style>{`
+        @keyframes wave {
+          0%   { transform: scaleY(1); }
+          100% { transform: scaleY(1.8); }
+        }
+        @keyframes pulse-ring {
+          0%   { transform: scale(1);   opacity: 0.4; }
+          100% { transform: scale(1.7); opacity: 0; }
+        }
+        .pulse-ring { animation: pulse-ring 1.2s ease-out infinite; }
+      `}</style>
+
+      <div className="max-w-lg mx-auto space-y-5">
+
+        {/* ── Header ─────────────────────────────────────────────────────── */}
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <div className="flex items-center gap-2 mb-0.5">
+              <div className="w-8 h-8 rounded-lg bg-primary-500 flex items-center justify-center shadow-sm">
+                <Mic size={16} className="text-white" />
+              </div>
+              <h1 className="text-xl font-bold text-surface-900">{s.title}</h1>
+            </div>
+            <p className="text-sm text-surface-400 mt-0.5">{s.subtitle}</p>
           </div>
-          <p className="page-subtitle">Record your order in Hindi or Hinglish — AI will extract the details and ask clarifying questions if needed.</p>
+          <LanguageSelect />
         </div>
 
-        {/* ── IDLE / RECORDING / RECORDED ─────────────────────────────── */}
+        {/* TTS unavailable warning — shown on browsers without Web Speech API */}
+        {!isTTSSupported() && (
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
+            <Volume2 size={13} className="shrink-0" />
+            {lang === 'english'
+              ? 'Voice playback not supported in this browser. AI replies will be shown as text only.'
+              : 'Is browser mein voice playback support nahi hai. AI reply sirf text mein dikhega.'}
+          </div>
+        )}
+
+        {/* ── IDLE / RECORDING / RECORDED ────────────────────────────────── */}
         {[VOICE_STEPS.IDLE, VOICE_STEPS.RECORDING, VOICE_STEPS.RECORDED].includes(step) && (
-          <Card>
-            <Card.Header>
-              <h2 className="text-base font-semibold">
-                {step === VOICE_STEPS.IDLE     ? 'Ready to Record' :
-                 step === VOICE_STEPS.RECORDING ? 'Recording…' : 'Recording Complete'}
-              </h2>
-            </Card.Header>
-            <Card.Body className="flex flex-col items-center">
-              {step !== VOICE_STEPS.RECORDED && (
-                <div className="w-full">
-                  <div className="flex flex-col items-center gap-6 py-4">
-                    <div className="relative">
-                      {recorder.isRecording && (
-                        <div className="absolute inset-0 rounded-full bg-red-400 recording-pulse scale-125 opacity-30" />
-                      )}
-                      <button
-                        onClick={recorder.isRecording ? handleStopAndProcess : recorder.startRecording}
-                        className={`relative z-10 w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center shadow-card-md transition-all ${
-                          recorder.isRecording
-                            ? 'bg-red-500 hover:bg-red-600 text-white'
-                            : 'bg-primary-500 hover:bg-primary-600 text-white'
-                        }`}
-                        disabled={isLoading}
-                      >
-                        {recorder.isRecording
-                          ? <span className="w-6 h-6 sm:w-7 sm:h-7 bg-white rounded-sm" />
-                          : <Mic size={24} sm:size={30} />
-                        }
-                      </button>
-                    </div>
-                    {recorder.isRecording ? (
-                      <div className="text-center">
-                        <div className="flex items-center gap-2 justify-center mb-2">
-                          <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                          <span className="text-sm font-semibold text-red-600">Recording…</span>
-                        </div>
-                        <span className="text-2xl sm:text-3xl font-mono font-bold text-surface-800">{recorder.durationFormatted}</span>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-surface-500 text-center">
-                        Tap the mic to start · Speak in Hindi or Hinglish
-                      </p>
-                    )}
-                    {recorder.error && (
-                      <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg w-full">
-                        <AlertCircle size={16} className="text-red-500" />
-                        <p className="text-xs text-red-700">{recorder.error}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+          <div className="rounded-2xl border border-surface-100 bg-white shadow-card-sm overflow-hidden">
+            {/* Card top stripe */}
+            <div className="h-1 w-full bg-gradient-to-r from-primary-400 via-primary-500 to-indigo-500" />
 
-              {step === VOICE_STEPS.RECORDED && recorder.audioUrl && (
-                <div className="w-full space-y-6">
-                  <VoicePlayer audioUrl={recorder.audioUrl} duration={recorder.durationFormatted} />
-                  <div className="flex gap-3">
-                    <Button variant="secondary" onClick={handleReset} className="flex-1 justify-center">
-                      Record Again
-                    </Button>
-                    <Button variant="primary" onClick={handleSendAudio} isLoading={isLoading} className="flex-1 justify-center">
-                      Send to AI
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </Card.Body>
-          </Card>
-        )}
-
-        {/* ── PROCESSING ───────────────────────────────────────────────── */}
-        {step === VOICE_STEPS.PROCESSING && (
-          <Card>
-            <Card.Body className="flex flex-col items-center py-12 gap-4">
-              <div className="w-16 h-16 rounded-full bg-primary-50 flex items-center justify-center">
-                <Loader2 size={32} className="text-primary-500 animate-spin" />
-              </div>
+            <div className="p-6 flex flex-col items-center gap-6">
               <div className="text-center">
-                <p className="font-semibold text-surface-800">AI is processing…</p>
-                <p className="text-sm text-surface-400 mt-1">Extracting shop name, products, and quantities</p>
+                <p className="font-semibold text-surface-800">
+                  {step === VOICE_STEPS.IDLE     ? s.readyTitle :
+                   step === VOICE_STEPS.RECORDING ? s.recordingLabel : '✅ ' + (lang === 'english' ? 'Recording complete' : 'Recording complete')}
+                </p>
+                {step !== VOICE_STEPS.RECORDING && (
+                  <p className="text-xs text-surface-400 mt-0.5">{s.readyHint}</p>
+                )}
               </div>
-            </Card.Body>
-          </Card>
-        )}
 
-        {/* ── CONVERSATION (AI asking clarification) ───────────────────── */}
-        {step === VOICE_STEPS.CONVERSATION && aiResponse && (
-          <div className="space-y-4">
-            {/* AI Message Card */}
-            <Card>
-              <Card.Header>
-                <div className="flex items-center gap-2">
-                  <MessageSquare size={18} className="text-primary-500" />
-                  <h2 className="text-base font-semibold">AI Assistant</h2>
-                </div>
-              </Card.Header>
-              <Card.Body className="space-y-4">
-                {/* AI Text Message */}
-                <div className="p-4 bg-primary-50 rounded-xl border border-primary-100">
-                  <p className="text-sm text-surface-800">{aiResponse.message}</p>
-                </div>
-
-                {/* TTS Audio Playback */}
-                {aiResponse.audio_base64 && (
-                  <div className="flex items-center gap-3">
-                    <VoicePlayer
-                      audioUrl={`data:audio/mp3;base64,${aiResponse.audio_base64}`}
-                      duration="AI Response"
-                    />
-                  </div>
-                )}
-
-                {/* Clarification Field Indicator */}
-                {aiResponse.clarification_field && (
-                  <div className="flex items-center gap-2 text-xs text-surface-400">
-                    <span className="px-2 py-1 bg-surface-100 rounded-full">
-                      Clarifying: {aiResponse.clarification_field}
-                    </span>
-                  </div>
-                )}
-              </Card.Body>
-            </Card>
-
-            {/* User Reply Options */}
-            <Card>
-              <Card.Header>
-                <h2 className="text-base font-semibold">Your Reply</h2>
-              </Card.Header>
-              <Card.Body className="space-y-4">
-                {/* Text Reply Input */}
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={textReply}
-                    onChange={(e) => setTextReply(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSendTextReply()}
-                    placeholder="Type your answer here..."
-                    className="flex-1 px-4 py-2 border border-surface-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    disabled={isLoading}
-                  />
-                  <Button
-                    onClick={handleSendTextReply}
-                    isLoading={isLoading}
-                    disabled={!textReply.trim()}
-                    className="px-4"
-                  >
-                    <Send size={18} />
-                  </Button>
-                </div>
-
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-surface-200" />
-                  </div>
-                  <div className="relative flex justify-center text-xs">
-                    <span className="px-2 bg-white text-surface-400">or</span>
-                  </div>
-                </div>
-
-                {/* Voice Reply */}
-                <div className="flex flex-col items-center gap-4 py-2">
+              {/* Mic Button */}
+              {step !== VOICE_STEPS.RECORDED && (
+                <div className="relative flex items-center justify-center">
+                  {/* Pulse rings */}
+                  {recorder.isRecording && (
+                    <>
+                      <span className="absolute w-24 h-24 rounded-full bg-red-300 pulse-ring" style={{ animationDelay: '0ms' }} />
+                      <span className="absolute w-24 h-24 rounded-full bg-red-200 pulse-ring" style={{ animationDelay: '400ms' }} />
+                    </>
+                  )}
                   <button
                     onClick={recorder.isRecording ? handleStopAndProcess : recorder.startRecording}
-                    className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center shadow-card-md transition-all ${
-                      recorder.isRecording
-                        ? 'bg-red-500 hover:bg-red-600 text-white'
-                        : 'bg-primary-500 hover:bg-primary-600 text-white'
-                    }`}
                     disabled={isLoading}
+                    aria-label={recorder.isRecording ? s.stopLabel : s.readyHint}
+                    className={`relative z-10 w-20 h-20 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 focus:outline-none focus:ring-4 ${
+                      recorder.isRecording
+                        ? 'bg-red-500 hover:bg-red-600 focus:ring-red-200'
+                        : 'bg-primary-500 hover:bg-primary-600 focus:ring-primary-200'
+                    }`}
                   >
                     {recorder.isRecording
-                      ? <span className="w-4 h-4 sm:w-5 sm:h-5 bg-white rounded-sm" />
-                      : <Mic size={20} sm:size={24} />
+                      ? <span className="w-7 h-7 bg-white rounded-md" />
+                      : <Mic size={30} className="text-white" />
                     }
                   </button>
-                  {recorder.isRecording ? (
-                    <div className="text-center">
-                      <span className="text-xl sm:text-2xl font-mono font-bold text-surface-800">{recorder.durationFormatted}</span>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-surface-500">Record your answer</p>
+                </div>
+              )}
+
+              {/* Waveform (visible during recording) */}
+              {recorder.isRecording && (
+                <div className="flex flex-col items-center gap-2">
+                  <WaveformBars active={true} />
+                  <span className="text-2xl font-mono font-bold text-surface-800 tabular-nums">
+                    {recorder.durationFormatted}
+                  </span>
+                  <div className="flex items-center gap-1.5 text-xs text-red-500 font-medium">
+                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                    {s.recordingLabel}
+                  </div>
+                </div>
+              )}
+
+              {/* Recorder error */}
+              {recorder.error && (
+                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl w-full">
+                  <AlertCircle size={15} className="text-red-500 shrink-0" />
+                  <p className="text-xs text-red-700">{recorder.error}</p>
+                </div>
+              )}
+
+              {/* Recorded — playback + action buttons */}
+              {step === VOICE_STEPS.RECORDED && recorder.audioUrl && (
+                <div className="w-full space-y-3">
+                  <audio
+                    src={recorder.audioUrl}
+                    controls
+                    className="w-full h-10 rounded-lg"
+                    style={{ accentColor: 'var(--color-primary-500, #6366f1)' }}
+                  />
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button variant="secondary" onClick={handleReset} className="justify-center">
+                      {s.retake}
+                    </Button>
+                    <Button variant="primary" onClick={handleSendAudio} isLoading={isLoading} className="justify-center">
+                      {s.sendAudio}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── PROCESSING ─────────────────────────────────────────────────── */}
+        {step === VOICE_STEPS.PROCESSING && (
+          <div className="rounded-2xl border border-primary-100 bg-gradient-to-br from-primary-50 to-indigo-50 p-8 flex flex-col items-center gap-4 text-center">
+            <div className="relative">
+              <div className="w-16 h-16 rounded-full bg-white border border-primary-100 shadow-sm flex items-center justify-center">
+                <Loader2 size={28} className="text-primary-500 animate-spin" />
+              </div>
+              <Sparkles size={14} className="absolute -top-1 -right-1 text-amber-400 animate-pulse" />
+            </div>
+            <div>
+              <p className="font-semibold text-surface-800">{s.processingTitle}</p>
+              <p className="text-xs text-surface-400 mt-1">{s.processingHint}</p>
+            </div>
+            <WaveformBars active={true} />
+          </div>
+        )}
+
+        {/* ── CONVERSATION (clarification chat) ──────────────────────────── */}
+        {step === VOICE_STEPS.CONVERSATION && aiResponse && (
+          <div className="space-y-4">
+
+            {/* Chat bubble — AI message */}
+            <div className="rounded-2xl border border-surface-100 bg-white shadow-card-sm overflow-hidden">
+              <div className="h-1 w-full bg-gradient-to-r from-indigo-400 to-primary-500" />
+              <div className="p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-full bg-primary-100 flex items-center justify-center shrink-0">
+                    <Sparkles size={13} className="text-primary-600" />
+                  </div>
+                  <span className="text-xs font-bold text-primary-600 uppercase tracking-wide">{s.aiLabel}</span>
+                </div>
+                <div className="ml-9">
+                  <p className="text-sm text-surface-800 leading-relaxed">
+                    {aiMessage(aiResponse)}
+                  </p>
+                  {/* Show both language versions subtly */}
+                  {aiResponse.message_en && aiResponse.message_local && (
+                    <p className="text-xs text-surface-300 mt-2 italic">
+                      {lang === 'english' ? aiResponse.message_local : aiResponse.message_en}
+                    </p>
                   )}
                 </div>
 
-                {step === VOICE_STEPS.RECORDED && recorder.audioUrl && (
-                  <div className="flex gap-2">
-                    <VoicePlayer audioUrl={recorder.audioUrl} duration={recorder.durationFormatted} />
-                    <Button
-                      variant="primary"
-                      onClick={handleSendAudio}
-                      isLoading={isLoading}
-                      className="flex-1"
-                    >
-                      Send Voice Reply
-                    </Button>
-                  </div>
-                )}
-              </Card.Body>
-            </Card>
+                {/* Speak button */}
+                <button
+                  onClick={() => speakText(aiMessage(aiResponse), lang)}
+                  className="ml-9 flex items-center gap-1.5 text-xs text-surface-400 hover:text-primary-500 transition-colors"
+                >
+                  <Volume2 size={12} />
+                  {lang === 'english' ? 'Replay' : 'Dobara suno'}
+                </button>
+              </div>
+            </div>
 
-            {/* Cancel Button */}
-            <Button variant="secondary" onClick={handleReset} className="w-full">
-              Cancel & Start Over
-            </Button>
+            {/* Reply box */}
+            <div className="rounded-2xl border border-surface-100 bg-white shadow-card-sm p-4 space-y-4">
+              <p className="text-xs font-bold text-surface-400 uppercase tracking-wide">{s.yourReply}</p>
+
+              {/* Text input */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={textReply}
+                  onChange={(e) => setTextReply(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSendTextReply()}
+                  placeholder={s.typeReply}
+                  disabled={isLoading}
+                  className="flex-1 px-4 py-2.5 text-sm border border-surface-200 rounded-xl bg-surface-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-400 transition-all placeholder:text-surface-300"
+                />
+                <button
+                  onClick={handleSendTextReply}
+                  disabled={!textReply.trim() || isLoading}
+                  className="w-10 h-10 flex-shrink-0 rounded-xl bg-primary-500 hover:bg-primary-600 disabled:opacity-40 text-white flex items-center justify-center transition-all focus:outline-none focus:ring-2 focus:ring-primary-300"
+                >
+                  {isLoading ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} />}
+                </button>
+              </div>
+
+              {/* Divider */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-surface-100" />
+                <span className="text-xs text-surface-300">{s.orLabel}</span>
+                <div className="flex-1 h-px bg-surface-100" />
+              </div>
+
+              {/* Voice reply button */}
+              <div className="flex flex-col items-center gap-2">
+                <button
+                  onClick={recorder.isRecording ? handleStopAndProcess : recorder.startRecording}
+                  disabled={isLoading}
+                  className={`w-14 h-14 rounded-full flex items-center justify-center shadow-md transition-all focus:outline-none focus:ring-4 ${
+                    recorder.isRecording
+                      ? 'bg-red-500 hover:bg-red-600 focus:ring-red-200'
+                      : 'bg-surface-800 hover:bg-surface-900 focus:ring-surface-200'
+                  }`}
+                >
+                  {recorder.isRecording
+                    ? <span className="w-4 h-4 bg-white rounded-sm" />
+                    : <Mic size={20} className="text-white" />
+                  }
+                </button>
+                {recorder.isRecording ? (
+                  <div className="flex items-center gap-1.5 text-xs text-red-500 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                    {recorder.durationFormatted}
+                  </div>
+                ) : (
+                  <p className="text-xs text-surface-400">{s.voiceReply}</p>
+                )}
+              </div>
+
+              {/* Recorded audio ready to send */}
+              {step === VOICE_STEPS.RECORDED && recorder.audioUrl && (
+                <div className="flex gap-2">
+                  <audio src={recorder.audioUrl} controls className="flex-1 h-9 rounded-lg" />
+                  <Button variant="primary" onClick={handleSendAudio} isLoading={isLoading}>
+                    <Send size={14} />
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* Cancel link */}
+            <button
+              onClick={handleReset}
+              className="w-full text-xs text-surface-400 hover:text-red-500 transition-colors py-1"
+            >
+              {s.cancelOrder}
+            </button>
           </div>
         )}
 
-        {/* ── ERROR ────────────────────────────────────────────────────── */}
+        {/* ── ERROR ─────────────────────────────────────────────────────── */}
         {step === VOICE_STEPS.ERROR && (
-          <Card>
-            <Card.Body className="flex flex-col items-center py-10 gap-4 text-center">
-              <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
-                <AlertCircle size={30} className="text-red-500" />
-              </div>
-              <div>
-                <p className="font-semibold text-surface-800">Processing Failed</p>
-                <p className="text-sm text-surface-400 mt-1">{error}</p>
-              </div>
-              <Button onClick={handleReset} variant="secondary">Try Again</Button>
-            </Card.Body>
-          </Card>
+          <div className="rounded-2xl border border-red-100 bg-red-50 p-8 flex flex-col items-center gap-4 text-center">
+            <div className="w-14 h-14 rounded-full bg-white border border-red-100 flex items-center justify-center">
+              <AlertCircle size={26} className="text-red-500" />
+            </div>
+            <div>
+              <p className="font-semibold text-surface-800">{s.errorTitle}</p>
+              <p className="text-xs text-surface-400 mt-1">{error}</p>
+            </div>
+            <Button variant="secondary" onClick={handleReset}>{s.tryAgain}</Button>
+          </div>
         )}
 
-        {/* ── PREVIEW (Final Order) ──────────────────────────────────────── */}
-        {step === VOICE_STEPS.PREVIEW && aiResponse?.draft_order && (
+        {/* ── PREVIEW ───────────────────────────────────────────────────── */}
+        {step === VOICE_STEPS.PREVIEW && draftOrder && (
           <div className="space-y-4">
-            <Card>
-              <Card.Header>
-                <h2 className="text-base font-semibold">Order Summary</h2>
-              </Card.Header>
-              <Card.Body className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-surface-500">Shop:</span>
-                  <span className="font-semibold text-surface-800">{aiResponse.draft_order.shopName || 'Unknown'}</span>
-                </div>
-              </Card.Body>
-            </Card>
 
-            <Card>
-              <Card.Header>
-                <h2 className="text-base font-semibold">Order Items</h2>
-                <span className="text-sm text-surface-400">{aiResponse.draft_order.items?.length || 0} items</span>
-              </Card.Header>
-              <div className="divide-y divide-surface-100">
-                {aiResponse.draft_order.items?.map((item, i) => (
-                  <div key={i} className="px-4 sm:px-6 py-3 sm:py-3.5 flex justify-between items-center">
-                    <div>
-                      <p className="text-sm font-medium text-surface-800">{item.productName}</p>
-                      <p className="text-xs text-surface-400">{formatCurrency(item.unitPrice)} each</p>
+            {/* Order summary card */}
+            <div className="rounded-2xl border border-surface-100 bg-white shadow-card-sm overflow-hidden">
+              <div className="h-1 w-full bg-gradient-to-r from-emerald-400 to-teal-500" />
+              <div className="p-5 space-y-4">
+                <p className="text-xs font-bold text-surface-400 uppercase tracking-wide">{s.orderSummary}</p>
+
+                {/* Shop row */}
+                <div className="flex items-center gap-3 p-3 bg-surface-50 rounded-xl">
+                  <div className="w-9 h-9 rounded-lg bg-primary-100 flex items-center justify-center shrink-0">
+                    <Store size={16} className="text-primary-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-surface-400">{s.shop}</p>
+                    <p className="text-sm font-semibold text-surface-800">
+                      {draftOrder.shopName || '—'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* AI confirmation message */}
+                {aiResponse && (aiMessage(aiResponse)) && (
+                  <div className="flex items-start gap-2 p-3 bg-primary-50 rounded-xl border border-primary-100">
+                    <Sparkles size={13} className="text-primary-400 mt-0.5 shrink-0" />
+                    <p className="text-sm text-surface-700">{aiMessage(aiResponse)}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Items list */}
+            <div className="rounded-2xl border border-surface-100 bg-white shadow-card-sm overflow-hidden">
+              <div className="px-5 py-3.5 flex items-center justify-between border-b border-surface-50">
+                <div className="flex items-center gap-2">
+                  <ShoppingBag size={15} className="text-surface-400" />
+                  <p className="text-xs font-bold text-surface-400 uppercase tracking-wide">{s.orderItems}</p>
+                </div>
+                <span className="text-xs px-2 py-0.5 bg-surface-100 text-surface-500 rounded-full font-medium">
+                  {draftOrder.items?.length || 0} {s.items}
+                </span>
+              </div>
+              <div className="divide-y divide-surface-50">
+                {draftOrder.items?.map((item, i) => (
+                  <div key={i} className="px-5 py-3.5 flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-surface-800 truncate">{item.productName}</p>
+                      {item.variant_description && (
+                        <p className="text-xs text-surface-400 mt-0.5">{item.variant_description}</p>
+                      )}
                     </div>
-                    <div className="text-right">
-                      <p className="text-xs text-surface-400">×{item.quantity}</p>
-                      <p className="text-sm font-semibold">{formatCurrency(item.subtotal)}</p>
+                    <div className="ml-4 flex items-center gap-1.5 shrink-0">
+                      <span className="text-xs text-surface-400">{s.qty}</span>
+                      <span className="text-sm font-bold text-primary-600 min-w-[1.5rem] text-center">
+                        ×{item.quantity}
+                      </span>
                     </div>
                   </div>
                 ))}
               </div>
-              <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-surface-200 flex justify-between">
-                <span className="font-semibold text-surface-700">Estimated Total</span>
-                <span className="font-bold text-base sm:text-lg text-surface-900">
-                  {formatCurrency(aiResponse.draft_order.items?.reduce((sum, i) => sum + parseFloat(i.subtotal || 0), 0) || 0)}
-                </span>
-              </div>
-            </Card>
+            </div>
 
-            <div className="flex gap-3">
-              <Button variant="secondary" onClick={handleReset} className="flex-1 justify-center">
-                Cancel
+            {/* Action buttons */}
+            <div className="grid grid-cols-2 gap-3">
+              <Button variant="secondary" onClick={handleReset} className="justify-center">
+                {s.cancel}
               </Button>
-              <Button variant="primary" onClick={handleConfirmOrder} isLoading={isLoading} className="flex-1 justify-center">
-                Confirm & Create Order
+              <button
+                onClick={handleConfirmOrder}
+                disabled={isLoading}
+                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white text-sm font-semibold shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-emerald-300"
+              >
+                {isLoading ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <>
+                    <CheckCircle2 size={16} />
+                    {s.confirmOrder}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── SUBMITTED ─────────────────────────────────────────────────── */}
+        {step === VOICE_STEPS.SUBMITTED && (
+          <div className="rounded-2xl overflow-hidden">
+            {/* Green gradient header */}
+            <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-8 flex flex-col items-center gap-4 text-center">
+              <div className="w-20 h-20 rounded-full bg-white/20 backdrop-blur flex items-center justify-center">
+                <CheckCircle2 size={44} className="text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-white">{s.orderCreated}</h2>
+                <p className="text-emerald-100 text-sm mt-1">{s.orderSuccess}</p>
+              </div>
+            </div>
+
+            {/* Order recap */}
+            {createdOrder && (
+              <div className="bg-white border border-t-0 border-surface-100 px-5 py-4 space-y-2">
+                {createdOrder.shopName && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-surface-400">{s.shop}</span>
+                    <span className="font-semibold text-surface-800">{createdOrder.shopName}</span>
+                  </div>
+                )}
+                {createdOrder.items?.length > 0 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-surface-400">{s.items}</span>
+                    <span className="font-semibold text-surface-800">{createdOrder.items.length}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* New order button */}
+            <div className="bg-white border border-t-0 border-surface-100 px-5 pb-5">
+              <Button
+                variant="secondary"
+                onClick={handleReset}
+                className="w-full justify-center"
+                leftIcon={<RefreshCw size={15} />}
+              >
+                {s.newOrder}
               </Button>
             </div>
           </div>
         )}
 
-        {/* ── SUBMITTED ────────────────────────────────────────────────── */}
-        {step === VOICE_STEPS.SUBMITTED && (
-          <Card>
-            <Card.Body className="flex flex-col items-center py-12 gap-5 text-center">
-              <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
-                <CheckCircle2 size={40} className="text-green-500" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-surface-900">Order Created!</h2>
-                <p className="text-surface-500 mt-1 text-sm">The order has been successfully submitted.</p>
-              </div>
-              <div className="flex gap-3 w-full justify-center">
-                <Button variant="secondary" onClick={handleReset} leftIcon={<RefreshCw size={15} />}>
-                  Record Another Order
-                </Button>
-              </div>
-            </Card.Body>
-          </Card>
-        )}
       </div>
     </DashboardLayout>
   );

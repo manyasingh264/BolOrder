@@ -2,22 +2,24 @@
 //
 // Why it exists: The top bar with toggle, breadcrumb, and user info is needed
 //               on every authenticated page. Built once, used everywhere.
-// Responsibility: Sidebar toggle, page title, user avatar + dropdown with logout.
+// Responsibility: Sidebar toggle (hamburger), page title, user avatar + dropdown with logout.
 // Used by: DashboardLayout.jsx
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
-import { LogOut, User, ChevronDown } from 'lucide-react';
+import { useDispatch, useSelector } from 'react-redux';
+import { LogOut, User, ChevronDown, Menu, X } from 'lucide-react';
 import { logout } from '../../redux/slices/authSlice';
+import { selectSidebarOpen, setSidebarOpen } from '../../redux/slices/uiSlice';
 import { ROUTES, ROLE_LABELS } from '../../constants';
 import { getInitials } from '../../utils';
 import useAuth from '../../hooks/useAuth';
 
 const Navbar = ({ title }) => {
-  const dispatch          = useDispatch();
-  const navigate          = useNavigate();
-  const { user, role }    = useAuth();
+  const dispatch       = useDispatch();
+  const navigate       = useNavigate();
+  const { user, role } = useAuth();
+  const isSidebarOpen  = useSelector(selectSidebarOpen);
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const handleLogout = () => {
@@ -25,12 +27,33 @@ const Navbar = ({ title }) => {
     navigate(ROUTES.LOGIN);
   };
 
+  const toggleSidebar = () => dispatch(setSidebarOpen(!isSidebarOpen));
+
   return (
     <header className="h-16 bg-white border-b border-surface-200 shadow-navbar flex items-center px-4 gap-3 flex-shrink-0">
 
-      {/* Page title */}
+      {/* ── Hamburger / sidebar toggle — mobile/tablet only ────────────── */}
+      <button
+        onClick={toggleSidebar}
+        className="lg:hidden w-9 h-9 flex items-center justify-center rounded-lg text-surface-500 hover:text-surface-800 hover:bg-surface-100 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-400"
+        aria-label={isSidebarOpen ? 'Close menu' : 'Open menu'}
+        id="sidebar-toggle-btn"
+      >
+        <span className="relative w-5 h-5 flex items-center justify-center">
+          <Menu
+            size={20}
+            className={`absolute transition-all duration-200 ${isSidebarOpen ? 'opacity-0 rotate-90 scale-75' : 'opacity-100 rotate-0 scale-100'}`}
+          />
+          <X
+            size={20}
+            className={`absolute transition-all duration-200 ${isSidebarOpen ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 -rotate-90 scale-75'}`}
+          />
+        </span>
+      </button>
+
+      {/* Page title — mobile/tablet only (desktop shows it in the sidebar) */}
       {title && (
-        <h2 className="text-base font-semibold text-surface-800 hidden sm:block">{title}</h2>
+        <h2 className="lg:hidden text-base font-semibold text-surface-800">{title}</h2>
       )}
 
       {/* Spacer */}

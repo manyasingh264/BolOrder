@@ -59,11 +59,16 @@ class Settings(BaseSettings):
     # ── Session ───────────────────────────────────────────────────
     SESSION_TTL_SECONDS: int = 1800          # 30 minutes
 
+    # ── Service Security ──────────────────────────────────────────
+    # Must match MS2_SERVICE_SECRET in ms1-core-api/.env exactly
+    MS2_SERVICE_SECRET: str = ""
+
     # ── Confidence Thresholds ─────────────────────────────────────
     SHOP_CONFIDENCE_THRESHOLD: int = 70      # RapidFuzz score 0-100 (high confidence)
-    SHOP_MIN_MATCH_THRESHOLD: int = 40       # Minimum score to consider as potential match (lowered for better recall)
+    SHOP_MIN_MATCH_THRESHOLD: int = 40       # Minimum score to consider as potential match
     PRODUCT_CONFIDENCE_THRESHOLD: int = 65   # RapidFuzz score 0-100
     MAX_RETRY_COUNT: int = 2                 # Max retries before offering alternatives
+
 
 
 # Singleton instance — import this everywhere

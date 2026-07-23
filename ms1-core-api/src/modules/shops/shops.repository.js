@@ -6,9 +6,9 @@
 //   - findShopById       → returns shop + its aliases (full detail)
 //   - No hard delete — orders reference shops
 
-const { eq } = require('drizzle-orm');
+const { eq, inArray } = require('drizzle-orm');
 const { db } = require('../../database/db');
-const { customerShops, shopAliases } = require('../../database/schema');
+const { customerShops, shopAliases, orders } = require('../../database/schema');
 
 // Get every shop (used by ADMIN and SUPERVISOR) - only active shops
 const findAllShops = async () => {
@@ -37,6 +37,30 @@ const findShopsBySalesmanId = async (salesmanId) => {
   });
 };
 
+// Get active shops that a specific salesman has placed at least one order from.
+// This is the salesman's personal shop history — no other salesman's data.
+const findShopsOrderedBySalesman = async (salesmanId) => {
+  // Step 1: get distinct shopIds from this salesman's orders only
+  const rows = await db
+    .selectDistinct({ shopId: orders.shopId })
+    .from(orders)
+    .where(eq(orders.salesmanId, salesmanId));
+
+  const shopIds = rows.map((r) => r.shopId).filter(Boolean);
+
+  if (shopIds.length === 0) return [];
+
+  // Step 2: fetch those shops with full detail
+  return db.query.customerShops.findMany({
+    where: (customerShops) => inArray(customerShops.id, shopIds),
+    with: {
+      aliases: true,
+      salesman: true,
+    },
+    orderBy: (customerShops, { asc }) => [asc(customerShops.shopName)],
+  });
+};
+
 // Get one shop with its aliases by ID
 const findShopById = async (id) => {
   return db.query.customerShops.findFirst({
@@ -48,8 +72,26 @@ const findShopById = async (id) => {
   });
 };
 
-// Insert a new shop
+// Find a shop by exact name (case-insensitive) — used by internal createShop
+// to avoid creating duplicate shops with the same name.
+const findShopByName = async (shopName) => {
+  return db.query.customerShops.findFirst({
+    where: (customerShops, { and, eq, sql }) =>
+      and(
+        eq(sql`LOWER(${customerShops.shopName})`, shopName.toLowerCase()),
+        eq(customerShops.isActive, true)
+      ),
+    with: { aliases: true, salesman: true },
+  });
+};
+
+// Insert a new shop — or return the existing one if the name already exists.
+// Prevents duplicate shops created by the AI in back-to-back sessions.
 const createShop = async (shopData) => {
+  // Check for existing shop with same name (case-insensitive) first
+  const existing = await findShopByName(shopData.shopName);
+  if (existing) return existing;   // Return existing shop — don't duplicate
+
   const result = await db
     .insert(customerShops)
     .values(shopData)
@@ -93,6 +135,8 @@ const deleteShop = async (id) => {
 module.exports = {
   findAllShops,
   findShopsBySalesmanId,
+  findShopsOrderedBySalesman,
+  findShopByName,
   findShopById,
   createShop,
   updateShop,

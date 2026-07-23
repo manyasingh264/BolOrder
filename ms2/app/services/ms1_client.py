@@ -1,18 +1,20 @@
 """
-MS1Client — Async HTTP client for the Business Microservice.
+ms1_client.py — Async HTTP client for the Business Microservice (MS1).
 
 Responsibility: ONLY make HTTP calls to MS1. No business logic here.
 
-MS1 API paths used (no /v1 prefix — MS1 mounts everything at /api):
-    GET  /api/shops           — List shops accessible to the authenticated salesman
-    POST /api/shops           — Create a new unverified shop
-    GET  /api/products        — List all products + variants
-    POST /api/orders          — Create a DRAFT order (JSON body)
-    POST /api/orders/voice    — Create a PENDING_CONFIRMATION voice order (JSON body)
+Internal API paths (MS2 → MS1, protected by X-Service-Key):
+    GET  /api/internal/context         — Load shops + products for session cache
+    POST /api/internal/orders          — Create voice order after AI conversation
+    POST /api/internal/shops           — Create unverified shop discovered by AI
+
+MS2 also uses the salesman's forwarded JWT for the context call so MS1
+can filter shops to only those assigned to the salesman.
 
 Design:
 - Async context manager — opened per request, closed after.
-- Auth token (salesman's JWT) forwarded to MS1 on every call.
+- X-Service-Key header always attached for internal routes.
+- Auth token (salesman's JWT) forwarded for user-scoped calls.
 - Returns plain dicts. Callers handle business logic.
 - Raises MS1ClientError on non-2xx responses.
 """
@@ -41,17 +43,20 @@ class MS1Client:
 
     Usage:
         async with MS1Client(auth_token=token) as client:
-            shops = await client.get_all_shops()
+            context = await client.get_context(salesman_id="uuid")
     """
 
     def __init__(self, auth_token: Optional[str] = None):
-        self._base_url = settings.MS1_BASE_URL
-        self._timeout  = settings.MS1_TIMEOUT_SECONDS
+        self._base_url   = settings.MS1_BASE_URL
+        self._timeout    = settings.MS1_TIMEOUT_SECONDS
         self._auth_token = auth_token
         self._client: Optional[httpx.AsyncClient] = None
 
     async def __aenter__(self):
-        headers = {"Content-Type": "application/json"}
+        headers = {
+            "Content-Type": "application/json",
+            "X-Service-Key": settings.MS2_SERVICE_SECRET,
+        }
         if self._auth_token:
             headers["Authorization"] = f"Bearer {self._auth_token}"
 
@@ -66,120 +71,140 @@ class MS1Client:
         if self._client:
             await self._client.aclose()
 
-    # ── Shop Operations ────────────────────────────────────────
+    # ── Internal Context API ─────────────────────────────────────────────────
 
-    async def get_all_shops(self) -> list[dict[str, Any]]:
+    async def get_context(self, salesman_id: str) -> dict[str, Any]:
         """
-        Fetch all shops accessible to the authenticated salesman.
-        MS1 automatically filters by salesman role — SALESMAN sees only their shops.
+        Fetch shops + products for the session business context cache.
 
-        Endpoint: GET /api/shops
-        Returns: list of shop dicts [{id, shopName, ownerName, phone, salesman, aliases}]
-        """
-        try:
-            logger.info("MS1: Fetching shops")
-            response = await self._client.get("/api/shops")
-            response.raise_for_status()
-            data = response.json()
-            shops = data.get("data", [])
-            logger.info(f"MS1: Retrieved {len(shops)} shops")
-            return shops if isinstance(shops, list) else []
+        Endpoint: GET /api/internal/context?salesman_id=<uuid>
+        Returns:  { shops: [...], products: [...] }
 
-        except httpx.HTTPStatusError as e:
-            logger.error(f"MS1 get shops failed: {e.response.status_code}")
-            return []
-        except Exception as e:
-            logger.error(f"MS1 get shops error: {e}")
-            return []
-
-    async def create_shop(self, shop_name: str, owner_name: Optional[str] = None) -> Optional[dict[str, Any]]:
-        """
-        Create a new shop in MS1 with isVerified=false.
-        The salesman's salesmanId is inferred from their JWT token by MS1.
-
-        Endpoint: POST /api/shops
-        """
-        payload: dict[str, Any] = {"shopName": shop_name}
-        if owner_name:
-            payload["ownerName"] = owner_name
-
-        try:
-            logger.info(f"MS1: Creating shop '{shop_name}'")
-            response = await self._client.post("/api/shops", json=payload)
-            response.raise_for_status()
-            data = response.json()
-            shop = data.get("data", data)
-            logger.info(f"MS1: Shop created | id={shop.get('id')}")
-            return shop
-
-        except httpx.HTTPStatusError as e:
-            logger.error(f"MS1 create shop failed: {e.response.status_code} — {e.response.text}")
-            raise MS1ClientError(e.response.status_code, e.response.text)
-        except Exception as e:
-            logger.error(f"MS1 create shop error: {e}")
-            raise MS1ClientError(500, str(e))
-
-    # ── Product Operations ─────────────────────────────────────
-
-    async def get_all_products(self) -> list[dict[str, Any]]:
-        """
-        Fetch all active products with their variants.
-        Nodes use RapidFuzz to match the spoken product name against these.
-
-        Endpoint: GET /api/products
-        Returns: list of product dicts [{id, name, category, variants: [{id, weight, unit, price}]}]
+        MS1 returns only shops assigned to this salesman.
+        Products are the full catalog with variants and aliases.
         """
         try:
-            logger.info("MS1: Fetching products")
-            response = await self._client.get("/api/products")
+            logger.info(f"MS1: Loading business context | salesman={salesman_id[:8]}...")
+            response = await self._client.get(
+                "/api/internal/context",
+                params={"salesman_id": salesman_id},
+            )
             response.raise_for_status()
             data = response.json()
-            products = data.get("data", [])
-            logger.info(f"MS1: Retrieved {len(products)} products")
-            return products if isinstance(products, list) else []
+            context = data.get("data", {})
+            shops    = context.get("shops", [])
+            products = context.get("products", [])
+            logger.info(f"MS1: Context loaded | {len(shops)} shops | {len(products)} products")
+            return {"shops": shops, "products": products}
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"MS1 get products failed: {e.response.status_code}")
-            return []
+            logger.error(f"MS1 get_context failed: {e.response.status_code} — {e.response.text}")
+            return {"shops": [], "products": []}
         except Exception as e:
-            logger.error(f"MS1 get products error: {e}")
-            return []
+            logger.error(f"MS1 get_context error: {e}")
+            return {"shops": [], "products": []}
 
-    # ── Order Operations ───────────────────────────────────────
+    # ── Internal Order API ───────────────────────────────────────────────────
 
-    async def create_voice_order(
+    async def create_internal_order(
         self,
         shop_id: str,
+        salesman_id: str,
         items: list[dict[str, Any]],
         raw_transcript: Optional[str] = None,
     ) -> dict[str, Any]:
         """
-        Create a voice order in MS1 after salesman confirms the conversation.
+        Create a voice order after the salesman confirms the conversation.
 
-        Endpoint: POST /api/orders/voice
-        Payload:  { shopId, items: [{productVariantId, quantity}], rawTranscript }
+        Endpoint: POST /api/internal/orders
+        Payload:  { shopId, salesmanId, items: [{productVariantId, quantity}], rawTranscript? }
 
-        MS1's voice order endpoint creates order at PENDING_CONFIRMATION status
-        and stores the raw transcript for audit purposes.
+        MS1 creates the order at PENDING_CONFIRMATION status.
+        Returns the full order object.
         """
         payload: dict[str, Any] = {
-            "shopId": shop_id,
-            "items":  items,
+            "shopId":     shop_id,
+            "salesmanId": salesman_id,
+            "items":      items,
         }
         if raw_transcript:
             payload["rawTranscript"] = raw_transcript
 
         try:
-            logger.info(f"MS1: Creating voice order | shopId={shop_id} | items={len(items)}")
-            response = await self._client.post("/api/orders/voice", json=payload)
+            logger.info(f"MS1: Creating internal order | shopId={shop_id} | items={len(items)}")
+            response = await self._client.post("/api/internal/orders", json=payload)
             response.raise_for_status()
             data = response.json()
-            logger.info("MS1: Voice order created successfully")
+            logger.info("MS1: Internal order created successfully")
             return data.get("data", data)
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"MS1 voice order failed: {e.response.status_code} — {e.response.text}")
+            logger.error(f"MS1 create_internal_order failed: {e.response.status_code} — {e.response.text}")
             raise MS1ClientError(e.response.status_code, e.response.text)
         except Exception as e:
-            logger.error(f"MS1 voice order error: {e}")
+            logger.error(f"MS1 create_internal_order error: {e}")
             raise MS1ClientError(500, str(e))
+
+    # ── Internal Shop API ────────────────────────────────────────────────────
+
+    async def create_internal_shop(
+        self,
+        shop_name: str,
+        salesman_id: str,
+        owner_name: Optional[str] = None,
+        phone: Optional[str] = None,
+        address: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """
+        Create a new unverified shop discovered during an AI conversation.
+
+        Endpoint: POST /api/internal/shops
+        The shop starts unverified — a manager must verify it later.
+        """
+        payload: dict[str, Any] = {
+            "shopName":   shop_name,
+            "salesmanId": salesman_id,
+        }
+        if owner_name: payload["ownerName"] = owner_name
+        if phone:      payload["phone"]     = phone
+        if address:    payload["address"]   = address
+
+        try:
+            logger.info(f"MS1: Creating internal shop '{shop_name}'")
+            response = await self._client.post("/api/internal/shops", json=payload)
+            response.raise_for_status()
+            data = response.json()
+            shop = data.get("data", data)
+            logger.info(f"MS1: Internal shop created | id={shop.get('id')}")
+            return shop
+
+        except httpx.HTTPStatusError as e:
+            logger.error(f"MS1 create_internal_shop failed: {e.response.status_code} — {e.response.text}")
+            raise MS1ClientError(e.response.status_code, e.response.text)
+        except Exception as e:
+            logger.error(f"MS1 create_internal_shop error: {e}")
+            raise MS1ClientError(500, str(e))
+
+    # ── Legacy fallback (kept for compatibility) ─────────────────────────────
+
+    async def get_all_shops(self) -> list[dict[str, Any]]:
+        """Legacy: Fetch shops via authenticated salesman JWT."""
+        try:
+            response = await self._client.get("/api/shops")
+            response.raise_for_status()
+            data = response.json()
+            return data.get("data", [])
+        except Exception as e:
+            logger.error(f"MS1 get_all_shops error: {e}")
+            return []
+
+    async def get_all_products(self) -> list[dict[str, Any]]:
+        """Legacy: Fetch products via authenticated salesman JWT."""
+        try:
+            response = await self._client.get("/api/products")
+            response.raise_for_status()
+            data = response.json()
+            return data.get("data", [])
+        except Exception as e:
+            logger.error(f"MS1 get_all_products error: {e}")
+            return []

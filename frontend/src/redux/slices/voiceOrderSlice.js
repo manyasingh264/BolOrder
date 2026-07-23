@@ -25,6 +25,7 @@ import {
   sendReply,
   endConversation,
 } from '../../services/voice.api';
+import { selectSelectedLanguage } from './voiceSettingSlice';
 
 export const VOICE_STEPS = {
   IDLE:         'IDLE',
@@ -41,9 +42,10 @@ export const VOICE_STEPS = {
 
 export const startSession = createAsyncThunk(
   'voiceOrder/startSession',
-  async (_, { rejectWithValue }) => {
+  async (_, { getState, rejectWithValue }) => {
     try {
-      const result = await startConversation();
+      const language = selectSelectedLanguage(getState());
+      const result = await startConversation(language);
       return result; // { sessionId, message }
     } catch (err) {
       return rejectWithValue(err.message || 'Failed to start conversation. Please try again.');
@@ -53,10 +55,11 @@ export const startSession = createAsyncThunk(
 
 export const processAudio = createAsyncThunk(
   'voiceOrder/processAudio',
-  async ({ sessionId, audioBlob }, { rejectWithValue }) => {
+  async ({ sessionId, audioBlob }, { getState, rejectWithValue }) => {
     try {
-      const result = await sendAudio(sessionId, audioBlob);
-      return result; // { sessionId, status, message, audio_base64, clarification_field, draft_order, order }
+      const language = selectSelectedLanguage(getState());
+      const result = await sendAudio(sessionId, audioBlob, language);
+      return result; // { sessionId, status, message_en, message_local, language, draft_order, order }
     } catch (err) {
       return rejectWithValue(err.message || 'Failed to process audio. Please try again.');
     }
@@ -65,10 +68,11 @@ export const processAudio = createAsyncThunk(
 
 export const processReply = createAsyncThunk(
   'voiceOrder/processReply',
-  async ({ sessionId, reply }, { rejectWithValue }) => {
+  async ({ sessionId, reply }, { getState, rejectWithValue }) => {
     try {
-      const result = await sendReply(sessionId, reply);
-      return result; // { sessionId, status, message, audio_base64, clarification_field, draft_order, order }
+      const language = selectSelectedLanguage(getState());
+      const result = await sendReply(sessionId, reply, language);
+      return result; // { sessionId, status, message_en, message_local, language, draft_order, order }
     } catch (err) {
       return rejectWithValue(err.message || 'Failed to send reply. Please try again.');
     }
@@ -97,8 +101,8 @@ const voiceOrderSlice = createSlice({
     sessionId:        null,   // Current conversation session ID
     audioBlob:        null,   // Blob from MediaRecorder
     audioDuration:    0,      // seconds recorded
-    aiResponse:       null,   // Latest AI response { status, message, audio_base64, clarification_field, draft_order, order }
-    conversationLog:  [],     // Array of { role: 'user'|'ai', message, audio_base64? }
+    aiResponse:       null,   // Latest AI response { status, message_en, message_local, language, draft_order, order }
+    conversationLog:  [],     // Array of { role: 'user'|'ai', message?, message_en?, message_local? }
     createdOrder:     null,   // The order returned after successful submission
     isLoading:        false,
     error:            null,
@@ -155,21 +159,33 @@ const voiceOrderSlice = createSlice({
         state.isLoading = false;
         state.aiResponse = payload;
 
-        // Add AI response to conversation log
+        // Add AI response to conversation log — store both language variants,
+        // the component decides which to display based on selected language.
         state.conversationLog.push({
           role: 'ai',
-          message: payload.message,
-          audio_base64: payload.audio_base64,
+          message_en:    payload.message_en,
+          message_local: payload.message_local,
         });
 
-        // Determine next step based on status
+        // Determine next step based on AI response status
         if (payload.status === 'clarifying') {
           state.step = VOICE_STEPS.CONVERSATION;
-        } else if (payload.status === 'confirming' || payload.status === 'completed') {
+        } else if (payload.status === 'confirming') {
+          // Draft order preview — wait for salesman to confirm
           state.step = VOICE_STEPS.PREVIEW;
+          if (payload.draft_order) {
+            state.createdOrder = payload.draft_order;
+          }
+        } else if (payload.status === 'completed') {
+          // Order created in backend
+          state.step         = VOICE_STEPS.SUBMITTED;
+          state.createdOrder = payload.order || payload.draft_order;
         } else if (payload.status === 'cancelled' || payload.status === 'failed') {
-          state.step = VOICE_STEPS.ERROR;
-          state.error = payload.message || 'Conversation ended unexpectedly.';
+          state.step  = VOICE_STEPS.ERROR;
+          state.error = payload.message_en || 'Conversation ended unexpectedly.';
+        } else {
+          // Unknown status — keep in conversation
+          state.step = VOICE_STEPS.CONVERSATION;
         }
       })
       .addCase(processAudio.rejected, (state, { payload }) => {
@@ -188,21 +204,27 @@ const voiceOrderSlice = createSlice({
         state.isLoading = false;
         state.aiResponse = payload;
 
-        // Add AI response to conversation log
         state.conversationLog.push({
           role: 'ai',
-          message: payload.message,
-          audio_base64: payload.audio_base64,
+          message_en:    payload.message_en,
+          message_local: payload.message_local,
         });
 
-        // Determine next step based on status
         if (payload.status === 'clarifying') {
           state.step = VOICE_STEPS.CONVERSATION;
-        } else if (payload.status === 'confirming' || payload.status === 'completed') {
+        } else if (payload.status === 'confirming') {
           state.step = VOICE_STEPS.PREVIEW;
+          if (payload.draft_order) {
+            state.createdOrder = payload.draft_order;
+          }
+        } else if (payload.status === 'completed') {
+          state.step         = VOICE_STEPS.SUBMITTED;
+          state.createdOrder = payload.order || payload.draft_order;
         } else if (payload.status === 'cancelled' || payload.status === 'failed') {
-          state.step = VOICE_STEPS.ERROR;
-          state.error = payload.message || 'Conversation ended unexpectedly.';
+          state.step  = VOICE_STEPS.ERROR;
+          state.error = payload.message_en || 'Conversation ended unexpectedly.';
+        } else {
+          state.step = VOICE_STEPS.CONVERSATION;
         }
       })
       .addCase(processReply.rejected, (state, { payload }) => {

@@ -94,6 +94,7 @@ const sendOTP = async (email) => {
 
   // Step 3: Generate OTP
   const otp = otpService.generateOTP();
+  console.log(otp);
 
   // Step 4: Store OTP in database
   await otpService.storeOTP(email, otp);

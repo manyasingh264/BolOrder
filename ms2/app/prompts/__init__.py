@@ -1,43 +1,16 @@
 """
-app/prompts — Prompt templates and user-facing message builders.
+app/prompts — Prompt builders for the voice order AI agent.
 
 Files:
-    extraction.py    — System prompt for Gemini entity extraction (shop name, products)
-    clarification.py — User-facing clarification messages (Hindi/English)
-    summary.py       — Order summary and confirmation messages
+    agent_prompt.py  — 5-part prompt builder for the single-agent architecture
+    clarification.py — Legacy user-facing clarification messages (kept for reference)
+    extraction.py    — Legacy extraction prompt (kept for reference)
+    summary.py       — Legacy summary/confirmation messages (kept for reference)
 
-Design principle:
-    All user-facing strings live here.
-    No hardcoded strings inside nodes or services.
-    Language-aware: every function accepts language="hi" | "en".
+Active:
+    agent_prompt.py — used by agent_node
 """
 
-from app.prompts.extraction    import build_extraction_prompt
-from app.prompts.clarification import (
-    shop_not_found_message,
-    create_new_shop_message,
-    product_not_found_message,
-    variant_unclear_message,
-    quantity_unclear_message,
-    general_clarification_message,
-)
-from app.prompts.summary import (
-    build_order_summary,
-    order_confirmed_message,
-    order_rejected_message,
-    order_failed_message,
-)
+from app.prompts.agent_prompt import build_agent_messages
 
-__all__ = [
-    "build_extraction_prompt",
-    "shop_not_found_message",
-    "create_new_shop_message",
-    "product_not_found_message",
-    "variant_unclear_message",
-    "quantity_unclear_message",
-    "general_clarification_message",
-    "build_order_summary",
-    "order_confirmed_message",
-    "order_rejected_message",
-    "order_failed_message",
-]
+__all__ = ["build_agent_messages"]

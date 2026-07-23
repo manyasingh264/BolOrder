@@ -24,6 +24,20 @@ const findAllProducts = async () => {
   });
 };
 
+// Get all products with their variants AND aliases
+// Used by: MS2 internal context API — AI needs aliases for fuzzy name matching
+const findAllProductsWithAliases = async () => {
+  return db.query.products.findMany({
+    where: (products, { eq }) => eq(products.isActive, true),
+    with: {
+      variants: true,
+      aliases:  true,
+    },
+    orderBy: (products, { asc }) => [asc(products.name)],
+  });
+};
+
+
 // Get one product with its variants AND aliases
 // Used by: product detail page, admin editing
 const findProductById = async (id) => {
@@ -108,6 +122,7 @@ const createAlias = async (aliasData) => {
 
 module.exports = {
   findAllProducts,
+  findAllProductsWithAliases,
   findProductById,
   createProduct,
   updateProduct,
