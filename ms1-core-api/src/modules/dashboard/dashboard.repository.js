@@ -118,6 +118,7 @@ const getTopProducts = async (limit = 5) => {
   return result.rows;
 };
 
+
 // ─── Salesman Performance ─────────────────────────────────────────────────────
 // Returns per-salesman breakdown:
 //   - total orders placed

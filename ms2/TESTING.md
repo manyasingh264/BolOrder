@@ -48,7 +48,7 @@ Open in browser: `http://localhost:8000/docs`
 
 The frontend calls these MS1 endpoints, which proxy to MS2:
 
-| Method   | MS1 Path                              | MS2 Path (proxied to)           |
+| Method   | MS1 Path                             | MS2 Path (proxied to)           |
 |----------|--------------------------------------|----------------------------------|
 | `POST`   | `/api/voice-sessions/start`          | `/api/v1/conversation/start`     |
 | `POST`   | `/api/voice-sessions/:id/audio`      | `/api/v1/conversation/audio`     |

@@ -8,6 +8,7 @@
 import { formatCurrency } from '../../utils';
 
 const TopProductsChart = ({ products, isLoading }) => {
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -30,10 +31,11 @@ const TopProductsChart = ({ products, isLoading }) => {
 
   return (
     <div className="space-y-4">
+
       {products.map((product, idx) => {
-        const revenue    = parseFloat(product.revenue || product.totalRevenue || 0);
-        const barWidth   = maxRevenue > 0 ? (revenue / maxRevenue) * 100 : 0;
-        const barColors  = [
+        const revenue = parseFloat(product.revenue || product.totalRevenue || 0);
+        const barWidth = maxRevenue > 0 ? (revenue / maxRevenue) * 100 : 0;
+        const barColors = [
           'bg-primary-500',
           'bg-primary-400',
           'bg-primary-300',

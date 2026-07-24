@@ -187,6 +187,67 @@ AGENT_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "clarifyVariant",
+            "description": (
+                "The product EXISTS in the catalog, but the size/weight/variant the salesman "
+                "mentioned does NOT match any available variant for that product. "
+                "Use this tool to inform the salesman which variants ARE available and ask them to choose one. "
+                "NEVER silently substitute a different variant — always ask using this tool. "
+                "Example: salesman says 'chana dal 100g' but only 200g and 500g exist — call clarifyVariant."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "product_name": {
+                        "type": "string",
+                        "description": "The product name that was found in the catalog"
+                    },
+                    "spoken_variant": {
+                        "type": "string",
+                        "description": "The size/weight the salesman said (e.g. '100 gram')"
+                    },
+                    "available_variants": {
+                        "type": "array",
+                        "description": "All available variants for this product from the catalog",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "variant_id": {
+                                    "type": "string",
+                                    "description": "UUID of the variant"
+                                },
+                                "size": {
+                                    "type": "string",
+                                    "description": "Size value (e.g. '200')"
+                                },
+                                "unit": {
+                                    "type": "string",
+                                    "description": "Unit (e.g. 'gram', 'kg', 'packet')"
+                                },
+                                "price": {
+                                    "type": "string",
+                                    "description": "Price of this variant"
+                                },
+                            },
+                            "required": ["variant_id", "size", "unit"],
+                        },
+                    },
+                    "message_en": {
+                        "type": "string",
+                        "description": "Message in English listing the available sizes and asking which one"
+                    },
+                    "message_local": {
+                        "type": "string",
+                        "description": "Same message in Hinglish/Hindi — list the sizes clearly"
+                    },
+                },
+                "required": ["product_name", "spoken_variant", "available_variants", "message_en", "message_local"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "chooseShop",
             "description": (
                 "Multiple shops match the spoken name. Present options and ask the salesman "
@@ -452,6 +513,7 @@ TOOL_STATUS_MAP = {
     "clarifyShop":        "clarifying",
     "clarifyProduct":     "clarifying",
     "clarifyQuantity":    "clarifying",
+    "clarifyVariant":     "clarifying",
     "chooseShop":         "clarifying",
     "previewOrder":       "confirming",
     "confirmOrder":       "confirming",

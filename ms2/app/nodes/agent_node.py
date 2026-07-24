@@ -384,6 +384,18 @@ async def agent_node(state: VoiceOrderState) -> dict:
                   "shopNotFound", "productNotFound", "repeatVoice"):
         memory_updates["clarify_count"] = clarify_count + 1
 
+    # ── clarifyVariant — store pending variant state ───────────────────────────
+    elif tool == "clarifyVariant":
+        memory_updates["clarify_count"] = clarify_count + 1
+        memory_updates["clarification_state"] = {
+            "type":               "variantMismatch",
+            "product_name":       args.get("product_name", ""),
+            "spoken_variant":     args.get("spoken_variant", ""),
+            "available_variants": args.get("available_variants", []),
+        }
+        memory_updates["current_step"] = "clarifying_variant"
+
+
     elif tool == "respondMessage":
         if "?" in message_en or "?" in message_local:
             memory_updates["clarify_count"] = clarify_count + 1
